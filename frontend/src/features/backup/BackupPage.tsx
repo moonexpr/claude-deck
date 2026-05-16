@@ -12,6 +12,7 @@ import { BackupList } from "./BackupList";
 import { BackupWizard } from "./BackupWizard";
 import { RestoreWizard } from "./RestoreWizard";
 import { RefreshButton } from "@/components/shared/RefreshButton";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { apiClient, buildEndpoint } from "@/lib/api";
 import { useProjectContext } from "@/contexts/ProjectContext";
 import { toast } from "sonner";
@@ -123,26 +124,19 @@ export function BackupPage() {
   const backupsWithDeps = backups.filter((b) => b.has_dependencies).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Archive className="h-8 w-8" />
-            Backup & Restore
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Create and manage configuration backups with dependency tracking
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <RefreshButton onClick={fetchBackups} loading={loading} />
-          <Button onClick={() => setShowCreateWizard(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Backup
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Backup & Restore"
+        description="Create and manage configuration backups with dependency tracking"
+        icon={Archive}
+      >
+        <RefreshButton onClick={fetchBackups} loading={loading} />
+        <Button size="sm" onClick={() => setShowCreateWizard(true)} className="h-8 md:h-10 text-xs md:text-sm">
+          <Plus className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" />
+          Create Backup
+        </Button>
+      </PageHeader>
 
       {/* Error Display */}
       {error && (

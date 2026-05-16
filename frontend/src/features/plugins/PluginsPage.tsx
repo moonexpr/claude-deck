@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, Package, Store, Settings, Globe, ArrowUpCircle } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { InstalledPlugins } from "./InstalledPlugins";
 import { PluginDetails } from "./PluginDetails";
 import { MarketplaceBrowser } from "./MarketplaceBrowser";
@@ -245,25 +246,20 @@ export function PluginsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Package className="h-8 w-8" />
-            Plugins
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            Manage Claude Code plugins and browse marketplace
-          </p>
-        </div>
+      <PageHeader
+        title="Plugins"
+        description="Manage Claude Code plugins and browse marketplace"
+        icon={Package}
+      >
         {updatesCount > 0 && (
-          <Button variant="default" onClick={handleUpdateAll} className="bg-orange-500 hover:bg-orange-600">
-            <ArrowUpCircle className="h-4 w-4 mr-2" />
+          <Button variant="default" size="sm" onClick={handleUpdateAll} className="bg-orange-500 hover:bg-orange-600 h-8 md:h-10 text-xs md:text-sm">
+            <ArrowUpCircle className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" />
             Update All ({updatesCount})
           </Button>
         )}
-      </div>
+      </PageHeader>
 
       {/* Error display */}
       {error && (

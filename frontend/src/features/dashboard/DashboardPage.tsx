@@ -7,6 +7,7 @@ import { Progress } from '@/components/ui/progress'
 import { useDashboard } from '@/contexts/DashboardContext'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import { getRelativeTime } from '@/features/usage/utils'
+import { PageHeader } from '@/components/layout/PageHeader'
 
 export function DashboardPage() {
   const { stats, loading, error, lastFetched, refreshDashboard } = useDashboard({ autoFetch: true })
@@ -14,26 +15,19 @@ export function DashboardPage() {
   const navigate = useNavigate()
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <LayoutDashboard className="h-8 w-8" />
-            Dashboard
-          </h1>
-          <p className="text-muted-foreground">
-            Overview of your Claude Code configuration
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {lastFetched && (
-            <span className="text-xs text-muted-foreground">
-              Updated {getRelativeTime(lastFetched.toISOString())}
-            </span>
-          )}
-          <RefreshButton onClick={refreshDashboard} loading={loading} />
-        </div>
-      </div>
+    <div className="space-y-4 md:space-y-6">
+      <PageHeader
+        title="Dashboard"
+        description="Overview of your Claude Code configuration"
+        icon={LayoutDashboard}
+      >
+        {lastFetched && (
+          <span className="text-[10px] md:text-xs text-muted-foreground">
+            Updated {getRelativeTime(lastFetched.toISOString())}
+          </span>
+        )}
+        <RefreshButton onClick={refreshDashboard} loading={loading} />
+      </PageHeader>
 
       {error && (
         <Card className="border-destructive">

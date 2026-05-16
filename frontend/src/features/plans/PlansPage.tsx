@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { RefreshButton } from '@/components/shared/RefreshButton'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { usePlansApi } from '@/hooks/usePlansApi'
 import { CLICKABLE_CARD } from '@/lib/constants'
 import { formatBytes } from '@/types/backup'
@@ -96,19 +97,14 @@ export function PlansPage() {
   const grouped = useMemo(() => groupByDate(filteredPlans), [filteredPlans])
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <ClipboardList className="h-8 w-8" />
-            Plans
-          </h1>
-          <p className="text-muted-foreground">
-            Browse and search your Claude Code execution plans
-          </p>
-        </div>
+    <div className="space-y-4 md:space-y-6">
+      <PageHeader
+        title="Plans"
+        description="Browse and search your Claude Code execution plans"
+        icon={ClipboardList}
+      >
         <RefreshButton onClick={fetchData} loading={loading} />
-      </div>
+      </PageHeader>
 
       {error && (
         <Card className="border-destructive">

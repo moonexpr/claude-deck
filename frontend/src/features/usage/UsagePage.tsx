@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RefreshButton } from '@/components/shared/RefreshButton'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { useUsageApi } from '@/hooks/useUsageApi'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import { UsageSummaryCards } from './UsageSummaryCards'
@@ -139,28 +140,23 @@ export function UsagePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <BarChart3 className="h-8 w-8" />
-            Usage Tracking
-          </h1>
-          <p className="text-muted-foreground">
-            Monitor your Claude Code token usage and costs
-          </p>
-        </div>
+      <PageHeader
+        title="Usage Tracking"
+        description="Monitor your Claude Code token usage and costs"
+        icon={BarChart3}
+      >
         <RefreshButton onClick={handleRefresh} loading={loading} />
-      </div>
+      </PageHeader>
 
       {/* Error Display */}
       {error && (
         <Card className="border-destructive">
-          <CardHeader>
-            <CardTitle className="text-destructive">Error</CardTitle>
+          <CardHeader className="p-4">
+            <CardTitle className="text-destructive text-lg">Error</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 pb-4">
             <p className="text-sm">{error}</p>
           </CardContent>
         </Card>
@@ -168,13 +164,13 @@ export function UsagePage() {
 
       {/* Project Filter */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle>Filter</CardTitle>
-          <CardDescription>Filter usage data by project</CardDescription>
+        <CardHeader className="pb-3 md:pb-6 p-4 md:p-6">
+          <CardTitle className="text-lg md:text-xl">Filter</CardTitle>
+          <CardDescription className="text-xs md:text-sm">Filter usage data by project</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
           <Select value={selectedProject || 'all'} onValueChange={handleProjectChange}>
-            <SelectTrigger className="w-[300px]">
+            <SelectTrigger className="w-full sm:w-[300px]">
               <SelectValue placeholder="All projects" />
             </SelectTrigger>
             <SelectContent>
@@ -197,18 +193,20 @@ export function UsagePage() {
 
       {/* Tabbed Views */}
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="daily">Daily</TabsTrigger>
-          <TabsTrigger value="sessions">Sessions</TabsTrigger>
-          <TabsTrigger value="monthly">Monthly</TabsTrigger>
-          <TabsTrigger value="blocks">
-            Blocks
-            {activeBlock && (
-              <span className="ml-1 w-2 h-2 bg-success rounded-full animate-pulse" />
-            )}
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-2 -mb-2">
+          <TabsList className="w-full justify-start sm:justify-center">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="daily">Daily</TabsTrigger>
+            <TabsTrigger value="sessions">Sessions</TabsTrigger>
+            <TabsTrigger value="monthly">Monthly</TabsTrigger>
+            <TabsTrigger value="blocks">
+              Blocks
+              {activeBlock && (
+                <span className="ml-1 w-2 h-2 bg-success rounded-full animate-pulse" />
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">

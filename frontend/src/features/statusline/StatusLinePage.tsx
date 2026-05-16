@@ -25,6 +25,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { RefreshButton } from "@/components/shared/RefreshButton";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { apiClient } from "@/lib/api";
 import { CLICKABLE_CARD } from "@/lib/constants";
 import { toast } from "sonner";
@@ -221,20 +222,15 @@ export function StatusLinePage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Activity className="h-8 w-8" />
-            Status Line
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Customize the status bar displayed at the bottom of Claude Code
-          </p>
-        </div>
+      <PageHeader
+        title="Status Line"
+        description="Customize the status bar displayed at the bottom of Claude Code"
+        icon={Activity}
+      >
         <RefreshButton onClick={fetchData} loading={loading} />
-      </div>
+      </PageHeader>
 
       {/* Error Display */}
       {error && (

@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { RefreshButton } from "@/components/shared/RefreshButton";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { MemoryEditor } from "./MemoryEditor";
 import { RulesManager } from "./RulesManager";
 import { AutoMemoryManager } from "./AutoMemoryManager";
@@ -140,44 +141,44 @@ export function MemoryPage() {
   const ruleFiles = files.filter((f) => f.type === "rule");
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Memory</h1>
-          <p className="text-muted-foreground">
-            Manage CLAUDE.md files and rules that shape Claude's behavior
-          </p>
-        </div>
+    <div className="space-y-4 md:space-y-6">
+      <PageHeader
+        title="Memory"
+        description="Manage CLAUDE.md files and rules that shape Claude's behavior"
+        icon={Brain}
+      >
         <RefreshButton onClick={fetchHierarchy} loading={loading} />
-      </div>
+      </PageHeader>
 
       <Tabs
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as MemoryTab)}
       >
-        <TabsList>
-          <TabsTrigger value="hierarchy" className="gap-2">
-            <FolderTree className="h-4 w-4" />
-            Hierarchy
-          </TabsTrigger>
-          <TabsTrigger value="rules" className="gap-2">
-            <BookOpen className="h-4 w-4" />
-            Rules
-            {ruleFiles.length > 0 && (
-              <Badge variant="secondary" className="ml-1">
-                {ruleFiles.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="auto-memory" className="gap-2">
-            <Brain className="h-4 w-4" />
-            Auto Memory
-          </TabsTrigger>
-          <TabsTrigger value="imports" className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Imports
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-2 -mb-2">
+          <TabsList className="w-full justify-start sm:justify-center">
+            <TabsTrigger value="hierarchy" className="gap-2">
+              <FolderTree className="h-4 w-4" />
+              Hierarchy
+            </TabsTrigger>
+            <TabsTrigger value="rules" className="gap-2">
+              <BookOpen className="h-4 w-4" />
+              Rules
+              {ruleFiles.length > 0 && (
+                <Badge variant="secondary" className="ml-1">
+                  {ruleFiles.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="auto-memory" className="gap-2">
+              <Brain className="h-4 w-4" />
+              Auto Memory
+            </TabsTrigger>
+            <TabsTrigger value="imports" className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Imports
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="hierarchy" className="space-y-4">
           {error ? (

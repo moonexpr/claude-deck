@@ -12,6 +12,7 @@ import { AgentList } from "./AgentList";
 import { AgentEditor } from "./AgentEditor";
 import { AgentWizard } from "./AgentWizard";
 import { RefreshButton } from "@/components/shared/RefreshButton";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { apiClient, buildEndpoint } from "@/lib/api";
 import { useProjectContext } from "@/contexts/ProjectContext";
 import { toast } from "sonner";
@@ -111,26 +112,19 @@ export function AgentsPage() {
   const pluginAgents = agents.filter((a) => a.scope.startsWith("plugin:"));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Bot className="h-8 w-8" />
-            Agents
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Manage custom agents that can be invoked using the Task tool
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <RefreshButton onClick={fetchAgents} loading={loading} />
-          <Button onClick={() => setShowWizard(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Agent
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Agents"
+        description="Manage custom agents that can be invoked using the Task tool"
+        icon={Bot}
+      >
+        <RefreshButton onClick={fetchAgents} loading={loading} />
+        <Button size="sm" onClick={() => setShowWizard(true)} className="h-8 md:h-10 text-xs md:text-sm">
+          <Plus className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" />
+          New Agent
+        </Button>
+      </PageHeader>
 
       {/* Error Display */}
       {error && (

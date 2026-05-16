@@ -40,6 +40,7 @@ import { MCPServerForm } from "./MCPServerForm";
 import { MCPServerDetailDialog } from "./MCPServerDetailDialog";
 import { MCPRegistryBrowser } from "./MCPRegistryBrowser";
 import { RefreshButton } from "@/components/shared/RefreshButton";
+import { PageHeader } from "@/components/layout/PageHeader";
 import type {
   MCPServer,
   MCPServerCreate,
@@ -264,40 +265,35 @@ export function MCPServersPage() {
   const estimatedTime = serverCount * 10; // rough estimate: 10s per server
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Server className="h-8 w-8" />
-            MCP Servers
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Manage Model Context Protocol server configurations
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {activeTab === "my-servers" && serverCount > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setShowTestAllConfirm(true)}
-              disabled={testingAll || loading}
-            >
-              <PlayCircle className="h-4 w-4 mr-2" />
-              {testingAll ? "Testing..." : "Test All"}
+      <PageHeader
+        title="MCP Servers"
+        description="Manage Model Context Protocol server configurations"
+        icon={Server}
+      >
+        {activeTab === "my-servers" && serverCount > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowTestAllConfirm(true)}
+            disabled={testingAll || loading}
+            className="h-8 md:h-10 text-xs md:text-sm"
+          >
+            <PlayCircle className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" />
+            {testingAll ? "Testing..." : "Test All"}
+          </Button>
+        )}
+        {activeTab === "my-servers" && (
+          <>
+            <RefreshButton onClick={fetchServers} loading={loading} />
+            <Button size="sm" onClick={() => setShowWizard(true)} className="h-8 md:h-10 text-xs md:text-sm">
+              <Plus className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" />
+              Add Server
             </Button>
-          )}
-          {activeTab === "my-servers" && (
-            <>
-              <RefreshButton onClick={fetchServers} loading={loading} />
-              <Button onClick={() => setShowWizard(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Server
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
+          </>
+        )}
+      </PageHeader>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>

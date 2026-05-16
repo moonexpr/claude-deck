@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { MarkdownRenderer } from '@/components/shared/MarkdownRenderer'
 import { RefreshButton } from '@/components/shared/RefreshButton'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { usePlansApi } from '@/hooks/usePlansApi'
 import { formatBytes } from '@/types/backup'
 import type { PlanDetail } from '@/types/plans'
@@ -71,42 +72,43 @@ export function PlanDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          {backButton}
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <FileText className="h-8 w-8" />
-            {plan.title}
-          </h1>
-          <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground">
-            <span className="flex items-center gap-1" title={new Date(plan.modified_at).toLocaleString()}>
-              <Calendar className="h-3 w-3" />
-              {new Date(plan.modified_at).toLocaleDateString()}
-            </span>
-            <span className="flex items-center gap-1">
-              <HardDrive className="h-3 w-3" />
-              {formatBytes(plan.size_bytes)}
-            </span>
-            {plan.code_block_count > 0 && (
-              <span className="flex items-center gap-1">
-                <Code className="h-3 w-3" />
-                {plan.code_block_count} code block{plan.code_block_count !== 1 ? 's' : ''}
-              </span>
-            )}
-            {plan.table_count > 0 && (
-              <span className="flex items-center gap-1">
-                <Table className="h-3 w-3" />
-                {plan.table_count} table{plan.table_count !== 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1 font-mono">
-            {plan.filename}
-          </p>
-        </div>
+      <PageHeader
+        title={plan.title}
+        icon={FileText}
+      >
         <RefreshButton onClick={fetchPlan} loading={loading} />
+      </PageHeader>
+
+      <div className="space-y-4">
+        {backButton}
+        
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs md:text-sm text-muted-foreground">
+          <span className="flex items-center gap-1" title={new Date(plan.modified_at).toLocaleString()}>
+            <Calendar className="h-3 w-3" />
+            {new Date(plan.modified_at).toLocaleDateString()}
+          </span>
+          <span className="flex items-center gap-1">
+            <HardDrive className="h-3 w-3" />
+            {formatBytes(plan.size_bytes)}
+          </span>
+          {plan.code_block_count > 0 && (
+            <span className="flex items-center gap-1">
+              <Code className="h-3 w-3" />
+              {plan.code_block_count} code block{plan.code_block_count !== 1 ? 's' : ''}
+            </span>
+          )}
+          {plan.table_count > 0 && (
+            <span className="flex items-center gap-1">
+              <Table className="h-3 w-3" />
+              {plan.table_count} table{plan.table_count !== 1 ? 's' : ''}
+            </span>
+          )}
+          <span className="font-mono opacity-70 truncate max-w-full">
+            {plan.filename}
+          </span>
+        </div>
       </div>
 
       {/* Table of Contents */}

@@ -4,6 +4,7 @@ import { MessageSquare } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RefreshButton } from '@/components/shared/RefreshButton'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { useSessionsApi } from '@/hooks/useSessionsApi'
 import { useProjectContext } from '@/contexts/ProjectContext'
 import { SessionList } from './SessionList'
@@ -43,31 +44,26 @@ export function SessionsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <MessageSquare className="h-8 w-8" />
-            Session Transcripts
-          </h1>
-          <p className="text-muted-foreground">
-            View your Claude Code conversation history
-          </p>
-        </div>
+    <div className="space-y-4 md:space-y-6">
+      <PageHeader
+        title="Session Transcripts"
+        description="View your Claude Code conversation history"
+        icon={MessageSquare}
+      >
         <RefreshButton onClick={loadProjects} loading={loading} />
-      </div>
+      </PageHeader>
 
       {/* Project Filter */}
       <Card>
-        <CardHeader>
-          <CardTitle>Filter by Project</CardTitle>
-          <CardDescription>
+        <CardHeader className="pb-3 md:pb-6">
+          <CardTitle className="text-lg md:text-xl">Filter by Project</CardTitle>
+          <CardDescription className="text-xs md:text-sm">
             Select a project to view its sessions, or view all
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Select value={selectedProject || 'all'} onValueChange={handleProjectChange}>
-            <SelectTrigger className="w-[300px]">
+            <SelectTrigger className="w-full sm:w-[300px]">
               <SelectValue placeholder="All projects" />
             </SelectTrigger>
             <SelectContent>

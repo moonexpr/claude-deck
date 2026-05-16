@@ -3,6 +3,7 @@ import { Radio, Plug, Unplug, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { RefreshButton } from '@/components/shared/RefreshButton'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { PresenceCard } from './PresenceCard'
 import { ConnectDialog } from './ConnectDialog'
 import { fetchPresenceSessions, removeSession, clearAllSessions, fetchPresenceHooks } from './api'
@@ -121,50 +122,44 @@ export function PresencePage() {
   const errorCount = sortedSessions.filter((s) => s.status === 'error').length
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Radio className="h-8 w-8" />
-            Presence
-          </h1>
-          <p className="text-muted-foreground">
-            Real-time monitoring of Claude Code sessions
-          </p>
+      <PageHeader
+        title="Presence"
+        description="Real-time monitoring of Claude Code sessions"
+        icon={Radio}
+      >
+        {/* WS status indicator */}
+        <div className="flex items-center gap-1.5 text-[10px] md:text-xs">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              connected ? 'bg-green-500 animate-pulse' : reconnecting ? 'bg-yellow-500 animate-pulse' : 'bg-muted-foreground'
+            }`}
+          />
+          <span className="text-muted-foreground">
+            {connected ? 'Live' : reconnecting ? 'Reconnecting...' : 'Disconnected'}
+          </span>
         </div>
-        <div className="flex items-center gap-3">
-          {/* WS status indicator */}
-          <div className="flex items-center gap-1.5 text-xs">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                connected ? 'bg-green-500 animate-pulse' : reconnecting ? 'bg-yellow-500 animate-pulse' : 'bg-muted-foreground'
-              }`}
-            />
-            <span className="text-muted-foreground">
-              {connected ? 'Live' : reconnecting ? 'Reconnecting...' : 'Disconnected'}
-            </span>
-          </div>
-          <RefreshButton onClick={loadSessions} loading={loading} />
-          <Button
-            variant={hooksConnected ? 'outline' : 'default'}
-            size="sm"
-            onClick={() => setConnectOpen(true)}
-          >
-            {hooksConnected ? (
-              <>
-                <Unplug className="h-4 w-4 mr-1" />
-                Connected
-              </>
-            ) : (
-              <>
-                <Plug className="h-4 w-4 mr-1" />
-                Connect to Deck
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
+        <RefreshButton onClick={loadSessions} loading={loading} />
+        <Button
+          variant={hooksConnected ? 'outline' : 'default'}
+          size="sm"
+          onClick={() => setConnectOpen(true)}
+          className="h-8 md:h-10 text-xs md:text-sm"
+        >
+          {hooksConnected ? (
+            <>
+              <Unplug className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" />
+              Connected
+            </>
+          ) : (
+            <>
+              <Plug className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" />
+              Connect to Deck
+            </>
+          )}
+        </Button>
+      </PageHeader>
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">

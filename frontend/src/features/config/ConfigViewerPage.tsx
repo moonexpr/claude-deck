@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Settings, Eye, Edit, Shield } from 'lucide-react'
 import type { ConfigFileListResponse, ConfigValue } from '@/types/config'
 import { RefreshButton } from '@/components/shared/RefreshButton'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { ConfigFileList } from './ConfigFileList'
 import { ConfigFileViewer } from './ConfigFileViewer'
 import { SettingsEditor } from './settings'
@@ -68,35 +69,32 @@ export function ConfigViewerPage() {
   }
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Settings className="h-8 w-8" />
-            Configuration
-          </h1>
-          <p className="text-muted-foreground">
-            View and edit Claude Code configuration
-          </p>
-        </div>
+    <div className="space-y-4 md:space-y-6 h-full flex flex-col">
+      <PageHeader
+        title="Configuration"
+        description="View and edit Claude Code configuration"
+        icon={Settings}
+      >
         <RefreshButton onClick={fetchData} loading={loading} />
-      </div>
+      </PageHeader>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1 flex flex-col overflow-hidden">
-        <TabsList className="w-fit">
-          <TabsTrigger value="editor" className="flex items-center gap-2">
-            <Edit className="h-4 w-4" />
-            Settings Editor
-          </TabsTrigger>
-          <TabsTrigger value="scopes" className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            Scope Resolver
-          </TabsTrigger>
-          <TabsTrigger value="viewer" className="flex items-center gap-2">
-            <Eye className="h-4 w-4" />
-            Raw Viewer
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-2 -mb-2">
+          <TabsList className="w-full justify-start sm:justify-center">
+            <TabsTrigger value="editor" className="flex items-center gap-2">
+              <Edit className="h-4 w-4" />
+              Settings Editor
+            </TabsTrigger>
+            <TabsTrigger value="scopes" className="flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              Scope Resolver
+            </TabsTrigger>
+            <TabsTrigger value="viewer" className="flex items-center gap-2">
+              <Eye className="h-4 w-4" />
+              Raw Viewer
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="editor" className="flex-1 overflow-auto mt-4">
           <SettingsEditor onSave={fetchData} />
@@ -109,22 +107,22 @@ export function ConfigViewerPage() {
         <TabsContent value="viewer" className="flex-1 overflow-hidden mt-4">
           {error && (
             <Card className="border-destructive mb-4">
-              <CardHeader>
-                <CardTitle className="text-destructive">Error</CardTitle>
+              <CardHeader className="p-4">
+                <CardTitle className="text-destructive text-lg">Error</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-4 pb-4">
                 <p className="text-sm">{error}</p>
               </CardContent>
             </Card>
           )}
 
-          <div className="grid grid-cols-12 gap-6 h-full overflow-hidden">
-            <div className="col-span-4 overflow-y-auto">
-              <Card className="h-full">
-                <CardHeader>
-                  <CardTitle>Config Files</CardTitle>
+          <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6 h-full overflow-hidden">
+            <div className="lg:col-span-4 overflow-y-auto">
+              <Card className="h-auto lg:h-full">
+                <CardHeader className="p-4">
+                  <CardTitle className="text-lg">Config Files</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-4 pb-4">
                   {loading && !data && (
                     <p className="text-sm text-muted-foreground">Loading files...</p>
                   )}
@@ -139,7 +137,7 @@ export function ConfigViewerPage() {
               </Card>
             </div>
 
-            <div className="col-span-8 overflow-y-auto">
+            <div className="lg:col-span-8 overflow-y-auto min-h-[400px]">
               <ConfigFileViewer filePath={selectedFile} />
             </div>
           </div>

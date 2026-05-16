@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { Gauge, HelpCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { RefreshButton } from '@/components/shared/RefreshButton'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { cn } from '@/lib/utils'
 import { useContextApi } from '@/hooks/useContextApi'
 import { ActiveSessionsList } from './ActiveSessionsList'
 import { ContextGauge } from './ContextGauge'
@@ -86,30 +88,23 @@ export function ContextPage() {
   }, [fetchSessions])
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Gauge className="h-8 w-8" />
-            Context Window
-          </h1>
-          <p className="text-muted-foreground">
-            Analyze context window usage across active sessions
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowHelp(!showHelp)}
-            className={showHelp ? 'text-primary' : ''}
-          >
-            <HelpCircle className="h-4 w-4 mr-1.5" />
-            Help
-          </Button>
-          <RefreshButton onClick={handleRefresh} loading={loading} />
-        </div>
-      </div>
+    <div className="space-y-4 md:space-y-6">
+      <PageHeader
+        title="Context Window"
+        description="Analyze context window usage across active sessions"
+        icon={Gauge}
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowHelp(!showHelp)}
+          className={cn("h-8 md:h-10 text-xs md:text-sm", showHelp && "text-primary")}
+        >
+          <HelpCircle className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" />
+          Help
+        </Button>
+        <RefreshButton onClick={handleRefresh} loading={loading} />
+      </PageHeader>
 
       {/* Active Sessions */}
       <ActiveSessionsList

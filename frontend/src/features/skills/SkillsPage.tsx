@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { RefreshButton } from "@/components/shared/RefreshButton";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { SkillDetailDialog } from "./SkillDetailDialog";
 import { SkillRegistryBrowser } from "./SkillRegistryBrowser";
 import { apiClient, buildEndpoint } from "@/lib/api";
@@ -236,23 +237,17 @@ export function SkillsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Sparkles className="h-8 w-8" />
-            Skills
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Skills extend Claude's capabilities with specialized knowledge and
-            workflows
-          </p>
-        </div>
+      <PageHeader
+        title="Skills"
+        description="Skills extend Claude's capabilities with specialized knowledge and workflows"
+        icon={Sparkles}
+      >
         {activeTab === "installed" && (
           <RefreshButton onClick={fetchSkills} loading={loading} />
         )}
-      </div>
+      </PageHeader>
 
       {/* Error Display */}
       {error && activeTab === "installed" && (

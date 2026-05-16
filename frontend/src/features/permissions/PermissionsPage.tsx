@@ -23,6 +23,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RuleList } from "./RuleList";
 import { RuleBuilder } from "./RuleBuilder";
 import { RefreshButton } from "@/components/shared/RefreshButton";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { apiClient, buildEndpoint } from "@/lib/api";
 import { useProjectContext } from "@/contexts/ProjectContext";
 import { toast } from "sonner";
@@ -188,20 +189,15 @@ export function PermissionsPage() {
   const denyRules = rules.filter((r) => r.type === "deny");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Shield className="h-8 w-8" />
-            Permissions
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Control which operations Claude Code can perform
-          </p>
-        </div>
+      <PageHeader
+        title="Permissions"
+        description="Control which operations Claude Code can perform"
+        icon={Shield}
+      >
         <RefreshButton onClick={fetchPermissions} loading={loading} />
-      </div>
+      </PageHeader>
 
       {/* Error Display */}
       {error && (
