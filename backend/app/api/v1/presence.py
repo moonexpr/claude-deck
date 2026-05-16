@@ -1,9 +1,10 @@
 """API endpoints for Presence Dashboard — webhook receiver, REST, and WebSocket."""
 import json
 
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.constants import SessionStatus
 from app.models.schemas import (
@@ -88,9 +89,23 @@ async def clear_all_sessions(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/config-snippet", response_model=PresenceConfigSnippet)
-async def get_config_snippet():
-    """Generate the settings.json snippet for hooking up Claude Code."""
-    url = "http://localhost:8000/api/v1/presence/events"
+async def get_config_snippet(request: Request):
+    """Generate the settings.json snippet for hooking up Claude Code.
+
+    The events URL is resolved in priority order:
+      1. settings.presence_public_url (env PRESENCE_PUBLIC_URL) — explicit override
+      2. the request's external host/proto (Host + X-Forwarded-Proto) — so viewing
+         the dialog through a reverse proxy yields that public hostname automatically
+      3. http://localhost:8000 — local fallback
+    """
+    override = (settings.presence_public_url or "").strip().rstrip("/")
+    if override:
+        base = override
+    else:
+        host = request.headers.get("host", "localhost:8000")
+        proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+        base = f"{proto}://{host}"
+    url = f"{base}/api/v1/presence/events"
     events = [
         "Notification", "PreToolUse", "PostToolUse", "Stop",
         "SessionStart", "SessionEnd", "UserPromptSubmit",

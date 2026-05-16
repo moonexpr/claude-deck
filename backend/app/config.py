@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
+    # Public URL used in the Presence "manual snippet" (env: PRESENCE_PUBLIC_URL).
+    # Empty = derive from the request Host / X-Forwarded-Proto headers.
+    # e.g. "https://deck.example.com"
+    presence_public_url: str = ""
+
 
 # Global settings instance
 settings = Settings()
