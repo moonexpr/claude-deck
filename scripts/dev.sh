@@ -48,10 +48,9 @@ done
 
 echo "Starting Claude Deck development servers..."
 
-# Check if backend venv exists
-if [ ! -d "$PROJECT_ROOT/backend/venv" ]; then
-    echo "Error: Backend virtual environment not found."
-    echo "Run ./scripts/install.sh first."
+# Check if backend Cargo.toml exists
+if [ ! -f "$PROJECT_ROOT/backend/Cargo.toml" ]; then
+    echo "Error: Backend Cargo.toml not found."
     exit 1
 fi
 
@@ -112,8 +111,7 @@ fi
 BACKEND_DISPLAY_HOST="${HOST:-localhost}"
 echo "Starting backend server on http://${BACKEND_DISPLAY_HOST}:8000..."
 cd "$PROJECT_ROOT/backend"
-source venv/bin/activate
-uvicorn app.main:app --reload --port 8000 "${BACKEND_HOST_ARGS[@]}" &
+cargo run &
 BACKEND_PID=$!
 
 # Start frontend

@@ -9,15 +9,14 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 echo "Setting up Claude Deck..."
 
-# Check Python version
-PYTHON_CMD="python3"
-if ! command -v $PYTHON_CMD &> /dev/null; then
-    echo "Error: Python 3 not found. Please install Python 3.11+."
+# Check Rust
+if ! command -v cargo &> /dev/null; then
+    echo "Error: Rust/Cargo not found. Please install Rust (https://rustup.rs/)."
     exit 1
 fi
 
-PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
-echo "Found Python $PYTHON_VERSION"
+RUST_VERSION=$(cargo --version)
+echo "Found Rust $RUST_VERSION"
 
 # Check Node.js
 if ! command -v node &> /dev/null; then
@@ -33,18 +32,10 @@ echo ""
 echo "Setting up backend..."
 cd "$PROJECT_ROOT/backend"
 
-if [ ! -d "venv" ]; then
-    echo "Creating Python virtual environment..."
-    $PYTHON_CMD -m venv venv
-fi
+echo "Building Rust backend..."
+cargo build
 
-echo "Activating virtual environment..."
-source venv/bin/activate
-
-echo "Installing Python dependencies..."
-pip install -r requirements.txt
-
-# Initialize database (handled on first run by FastAPI lifespan)
+# Initialize database (handled on first run by axum startup)
 echo "Backend setup complete!"
 
 # Setup frontend
