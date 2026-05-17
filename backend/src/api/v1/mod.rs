@@ -1,4 +1,23 @@
 pub mod sessions;
+pub mod presence;
+pub mod projects;
+pub mod config;
+pub mod usage;
+pub mod hooks;
+pub mod status;
+pub mod agents;
+pub mod backup;
+pub mod cli;
+pub mod commands;
+pub mod mcp;
+pub mod memory;
+pub mod output_styles;
+pub mod permissions;
+pub mod plans;
+pub mod plugins;
+pub mod statusline;
+pub mod cc_bridge;
+pub mod context;
 
 use axum::{
     routing::get,
@@ -30,11 +49,30 @@ pub fn router(pool: SqlitePool) -> Router {
     };
 
     Router::new()
-        .route("/status", get(status))
+        .route("/status", get(status_handler))
         .nest("/sessions", sessions::router())
+        .nest("/presence", presence::router())
+        .nest("/projects", projects::router())
+        .nest("/config", config::router())
+        .nest("/usage", usage::router())
+        .nest("/hooks", hooks::router())
+        .nest("/status-info", status::router())
+        .nest("/agents", agents::router())
+        .nest("/backup", backup::router())
+        .nest("/cli", cli::router())
+        .nest("/commands", commands::router())
+        .nest("/mcp", mcp::router())
+        .nest("/memory", memory::router())
+        .nest("/output-styles", output_styles::router())
+        .nest("/permissions", permissions::router())
+        .nest("/plans", plans::router())
+        .nest("/plugins", plugins::router())
+        .nest("/statusline", statusline::router())
+        .nest("/cc-bridge", cc_bridge::router())
+        .nest("/context", context::router())
         .with_state(state)
 }
 
-async fn status() -> &'static str {
+async fn status_handler() -> &'static str {
     "v1 API is active"
 }

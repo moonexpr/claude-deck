@@ -8,7 +8,28 @@ use crate::api::v1::ApiState;
 
 pub fn router() -> Router<ApiState> {
     Router::new()
-        .route("/:project/:session", get(get_session_detail))
+        .route("/", get(list_sessions))
+        .route("/projects", get(get_session_projects))
+        .route("/dashboard/stats", get(get_session_stats))
+        .route("/{project}/{session}", get(get_session_detail))
+}
+
+async fn list_sessions() -> Json<Value> {
+    Json(serde_json::json!({"sessions": [], "total": 0}))
+}
+
+async fn get_session_projects() -> Json<Value> {
+    Json(serde_json::json!({"projects": [], "total_sessions": 0}))
+}
+
+async fn get_session_stats() -> Json<Value> {
+    Json(serde_json::json!({
+        "total_sessions": 0,
+        "sessions_today": 0,
+        "sessions_this_week": 0,
+        "most_active_project": null,
+        "total_messages": 0
+    }))
 }
 
 async fn get_session_detail(
