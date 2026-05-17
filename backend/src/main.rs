@@ -1,18 +1,33 @@
 mod api;
+mod error;
+mod fileio;
 mod models;
+mod paths;
+mod patterns;
 mod services;
 
 use axum::{
     routing::get,
     Router,
+    Json,
 };
 use sqlx::sqlite::SqlitePoolOptions;
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tower_http::services::ServeDir;
+use tower_http::cors::{CorsLayer, Any};
+use std::path::PathBuf;
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct HealthResponse {
+    name: String,
+    version: String,
+    status: String,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize tracing
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
             std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
@@ -31,13 +46,35 @@ async fn main() -> anyhow::Result<()> {
         .connect(&database_url)
         .await?;
 
-    // Build our application with a single route
+    // Determine frontend path
+    let mut frontend_dist = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    frontend_dist.pop(); // Up from backend
+    frontend_dist.push("frontend/dist");
+
+    let index_path = frontend_dist.join("index.html");
+
+    // Configure CORS
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
+    // Build our application
     let app = Router::new()
         .route("/health", get(health))
-        .nest("/api/v1", api::v1::router(pool));
+        .nest("/api/v1", api::v1::router(pool))
+        .fallback_service(
+            ServeDir::new(frontend_dist)
+                .append_index_html_on_directories(true)
+                .not_found_service(tower_http::services::ServeFile::new(index_path))
+        )
+        .layer(cors);
 
     // Run it with hyper
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8000));
+    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8000".to_string());
+    let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
+
     tracing::info!("listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
@@ -45,6 +82,10 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn health() -> &'static str {
-    "OK"
+async fn health() -> Json<HealthResponse> {
+    Json(HealthResponse {
+        name: "Claude Deck".to_string(),
+        version: "1.2.0".to_string(),
+        status: "running".to_string(),
+    })
 }
