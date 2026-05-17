@@ -46,6 +46,7 @@ If you only use Claude Code casually with mostly default config, Claude Deck may
 - **Plan History** — Browse and review Claude Code implementation plans
 - **Backup & Restore** — Create and manage configuration backups with selective restore
 - **Projects** — Discover and manage project directories
+- **Mobile-friendly** — Responsive layout with unified page headers; usable from a phone or tablet, not just a desktop browser
 
 ## Screenshots
 
@@ -68,12 +69,18 @@ If you only use Claude Code casually with mostly default config, Claude Deck may
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Python 3.11+ with FastAPI |
-| Frontend | React 19 + TypeScript + Vite 7 |
+| Backend | Rust with axum (Tokio async) |
+| Frontend | React 19 + TypeScript + Vite 7 (responsive / mobile-friendly) |
 | UI Components | shadcn/ui + Tailwind CSS |
 | Charts | Recharts (via shadcn/ui) |
-| Database | SQLite (async via SQLAlchemy + aiosqlite) |
+| Database | SQLite (async via sqlx) |
 | Containerization | Docker + Docker Compose |
+
+> [!NOTE]
+> The backend was rewritten from Python/FastAPI to Rust/axum. It ships as a
+> single static binary that also serves the built frontend, so a production
+> deployment is one process with no Python runtime. The REST API surface
+> (`/api/v1/...`) and on-disk config behavior are unchanged.
 
 ## Quick Start with Docker
 
@@ -93,7 +100,7 @@ This builds and starts Claude Deck at http://localhost:8000, mounting your `~/.c
 
 ## Manual Installation
 
-**Prerequisites**: Python 3.11+, Node.js 18+
+**Prerequisites**: Rust 1.85+ (edition 2024, via [rustup](https://rustup.rs/)), Node.js 18+
 
 ```bash
 git clone https://github.com/adrirubio/claude-deck.git
@@ -108,16 +115,37 @@ cd claude-deck
 ```
 
 This starts:
-- Backend at http://localhost:8000 (API docs at http://localhost:8000/docs)
+- Backend at http://localhost:8000 (REST API under `/api/v1/`, health check at `/health`)
 - Frontend at http://localhost:5173
 
-To make the dev environment reachable from another machine on your LAN or tailnet (e.g. to monitor tmux sessions via CC Bridge from a different host), pass `--host`:
+The first `./scripts/dev.sh` run compiles the Rust backend (`cargo run`), which
+can take a few minutes; subsequent runs are incremental.
+
+### Hostname & remote access
+
+To reach the dev environment from another machine on your LAN or tailnet (e.g.
+to monitor tmux sessions via CC Bridge from a different host), pass `--host` —
+both servers then bind to all interfaces:
 
 ```bash
 ./scripts/dev.sh --host 0.0.0.0
 ```
 
-Both servers will then bind to all interfaces.
+The backend also honors environment variables (useful for the production
+binary / launchd / systemd / Docker):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `HOST` | `0.0.0.0` | Address the backend binds to |
+| `PORT` | `8000` | Port the backend listens on |
+| `PRESENCE_PUBLIC_URL` | *(auto)* | Base URL embedded in the CC Bridge / Presence setup snippet |
+
+`PRESENCE_PUBLIC_URL` only needs to be set if autodetection is wrong. When it
+is unset, the public URL is **auto-derived from the incoming request** — the
+`Host` header plus `X-Forwarded-Proto` — so the snippet shows the correct
+address whether you reach the UI over `localhost`, a LAN IP, a tailnet name,
+or a reverse proxy, with no configuration. Set it explicitly (e.g.
+`https://deck.example.com`) only to override that.
 
 ## Configuration Files
 
@@ -141,7 +169,9 @@ Claude Deck reads and writes these Claude Code configuration files:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, style, and PR guidelines.
 
-API documentation is available at http://localhost:8000/docs when running the dev server.
+The backend is a Rust/axum service; its REST API is served under `/api/v1/`
+(there is no auto-generated Swagger UI — the route modules in
+`backend/src/api/v1/` are the API reference).
 
 ## Feedback
 
