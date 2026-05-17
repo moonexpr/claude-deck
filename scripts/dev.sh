@@ -122,9 +122,8 @@ FRONTEND_PID=$!
 
 echo ""
 echo "Development servers started!"
-echo "  - Backend:  http://${BACKEND_DISPLAY_HOST}:8000"
+echo "  - Backend:  http://${BACKEND_DISPLAY_HOST}:8000 (REST API under /api/v1, health at /health)"
 echo "  - Frontend: http://${BACKEND_DISPLAY_HOST}:5173"
-echo "  - API Docs: http://${BACKEND_DISPLAY_HOST}:8000/docs"
 echo ""
 echo "Press Ctrl+C to stop all servers."
 

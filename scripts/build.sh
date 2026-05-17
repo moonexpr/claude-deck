@@ -9,17 +9,24 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 echo "Building Claude Deck for production..."
 
-# Build frontend
+# Build frontend (the backend binary serves frontend/dist directly)
 echo ""
 echo "Building frontend..."
 cd "$PROJECT_ROOT/frontend"
 npm run build
 
-# The built files will be in frontend/dist
+# Build the Rust backend (release)
+echo ""
+echo "Building backend (release)..."
+cd "$PROJECT_ROOT/backend"
+cargo build --release
+
 echo ""
 echo "Build complete!"
-echo "Frontend assets are in: frontend/dist"
+echo "  Frontend assets: frontend/dist"
+echo "  Backend binary:  backend/target/release/backend"
 echo ""
-echo "To deploy:"
-echo "  1. Serve frontend/dist with a static file server"
-echo "  2. Run backend with: cd backend && source venv/bin/activate && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+echo "To deploy, run the single backend binary (it also serves frontend/dist):"
+echo "  cd backend && PORT=8000 ./target/release/backend"
+echo ""
+echo "Override HOST / PORT / PRESENCE_PUBLIC_URL via environment variables."
