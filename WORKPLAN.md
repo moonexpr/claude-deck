@@ -11,8 +11,8 @@ Status legend: ⬜ todo · 🔵 in progress · ✅ done · ⏸ blocked
 
 - ✅ **A1** Branch `lift/tauri-portable-pty-cm6-aisdk` + `app/` skeleton tree — `2e90d78`
 - ✅ **A2a** `app/server` Cargo workspace — copy `backend/src` into `core` lib + thin `bin` — `645d907`
-- ⬜ **A2b** Introduce `ServerConfig`; eliminate env reads from handlers; `core::app(config)` entry point — **NEXT. Full engineer brief in `.claude/HANDOFF.md`.**
-- ⬜ **A3** Tauri 2 bootstrap at `app/desktop` — in-process embed, bootstrap page hits `/api/v1/status`
+- ✅ **A2b** Introduce `ServerConfig`; eliminate env reads from handlers; `core::app(config)` entry point — `be40ee1`
+- ⬜ **A3** Tauri 2 bootstrap at `app/desktop` — in-process embed, bootstrap page hits `/api/v1/status` — **NEXT**
 - ⬜ **A4** `app/web` Vite/React/TS scaffold — Tailwind 4 `@theme`, shadcn/ui, MainLayout shell
 - ⬜ **A5** Zustand stores `useProjectStore`, `useDashboardStore`; MainLayout consumes
 - ⬜ **A6** `CodeEditor` component (CM6 markdown mode) + demo route
