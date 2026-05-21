@@ -13,8 +13,8 @@ Status legend: ⬜ todo · 🔵 in progress · ✅ done · ⏸ blocked
 - ✅ **A2a** `app/server` Cargo workspace — copy `backend/src` into `core` lib + thin `bin` — `645d907`
 - ✅ **A2b** Introduce `ServerConfig`; eliminate env reads from handlers; `core::app(config)` entry point — `be40ee1`
 - ✅ **A3** Tauri 2 bootstrap at `app/desktop` — in-process embed, bootstrap page hits `/api/v1/status` — `c61c006`
-- 🔵 **A4** `app/web` Vite/React/TS scaffold — Tailwind 4 `@theme`, shadcn/ui, MainLayout shell — **IN PROGRESS** (`david`)
-- ⬜ **A5** Zustand stores `useProjectStore`, `useDashboardStore`; MainLayout consumes
+- ✅ **A4** `app/web` Vite/React/TS scaffold — Tailwind 4 `@theme`, shadcn/ui, MainLayout shell — `a0ec741`
+- 🔵 **A5** Zustand stores `useProjectStore`, `useDashboardStore`; MainLayout consumes — **IN PROGRESS** (`david`)
 - ⬜ **A6** `CodeEditor` component (CM6 markdown mode) + demo route
 - ⬜ **A7** `/api/v1/ai/chat` returns 501 + key-source diagnostics; AI SDK client wired, disabled
 - ⬜ **A8** Smoke harness — Rust route tests + Playwright nav config + one passing test
