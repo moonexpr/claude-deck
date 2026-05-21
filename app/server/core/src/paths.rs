@@ -3,7 +3,7 @@
 //! Faithful port of `backend_python/app/utils/path_utils.py`. Function names
 //! mirror the Python originals so per-module ports map 1:1.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// User's home directory. Falls back to `/` only if it cannot be determined
 /// (matches Python `Path.home()` which would raise; we degrade instead).
@@ -107,65 +107,61 @@ pub fn get_claude_plans_dir() -> PathBuf {
 
 // ---- Project-level (.claude in a project dir) -------------------------------
 
-/// `<project>/.claude/` (or `$CWD/.claude` when `project_path` is None).
-pub fn get_project_claude_dir(project_path: Option<&str>) -> PathBuf {
+/// `<project>/.claude/` — when `project_path` is `None`, uses `cwd_fallback`
+/// instead of `std::env::current_dir()`. The `cwd_fallback` is supplied by the
+/// embedder (captured once at startup) so the library never reads process state.
+pub fn get_project_claude_dir(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
     match project_path {
         Some(p) => PathBuf::from(p).join(".claude"),
-        None => std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(".claude"),
+        None => cwd_fallback.join(".claude"),
     }
 }
 
-pub fn get_project_settings_file(project_path: Option<&str>) -> PathBuf {
-    get_project_claude_dir(project_path).join("settings.json")
+pub fn get_project_settings_file(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
+    get_project_claude_dir(project_path, cwd_fallback).join("settings.json")
 }
 
-pub fn get_project_settings_local_file(project_path: Option<&str>) -> PathBuf {
-    get_project_claude_dir(project_path).join("settings.local.json")
+pub fn get_project_settings_local_file(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
+    get_project_claude_dir(project_path, cwd_fallback).join("settings.local.json")
 }
 
-pub fn get_project_commands_dir(project_path: Option<&str>) -> PathBuf {
-    get_project_claude_dir(project_path).join("commands")
+pub fn get_project_commands_dir(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
+    get_project_claude_dir(project_path, cwd_fallback).join("commands")
 }
 
-pub fn get_project_agents_dir(project_path: Option<&str>) -> PathBuf {
-    get_project_claude_dir(project_path).join("agents")
+pub fn get_project_agents_dir(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
+    get_project_claude_dir(project_path, cwd_fallback).join("agents")
 }
 
-pub fn get_project_hooks_dir(project_path: Option<&str>) -> PathBuf {
-    get_project_claude_dir(project_path).join("hooks")
+pub fn get_project_hooks_dir(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
+    get_project_claude_dir(project_path, cwd_fallback).join("hooks")
 }
 
-pub fn get_project_skills_dir(project_path: Option<&str>) -> PathBuf {
-    get_project_claude_dir(project_path).join("skills")
+pub fn get_project_skills_dir(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
+    get_project_claude_dir(project_path, cwd_fallback).join("skills")
 }
 
-pub fn get_project_plugins_dir(project_path: Option<&str>) -> PathBuf {
-    get_project_claude_dir(project_path).join("plugins")
+pub fn get_project_plugins_dir(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
+    get_project_claude_dir(project_path, cwd_fallback).join("plugins")
 }
 
-pub fn get_project_output_styles_dir(project_path: Option<&str>) -> PathBuf {
-    get_project_claude_dir(project_path).join("output-styles")
+pub fn get_project_output_styles_dir(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
+    get_project_claude_dir(project_path, cwd_fallback).join("output-styles")
 }
 
-/// `<project>/.mcp.json` (or `$CWD/.mcp.json`).
-pub fn get_project_mcp_config_file(project_path: Option<&str>) -> PathBuf {
+/// `<project>/.mcp.json` — when `project_path` is `None`, uses `cwd_fallback`.
+pub fn get_project_mcp_config_file(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
     match project_path {
         Some(p) => PathBuf::from(p).join(".mcp.json"),
-        None => std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(".mcp.json"),
+        None => cwd_fallback.join(".mcp.json"),
     }
 }
 
-/// `<project>/CLAUDE.md` (or `$CWD/CLAUDE.md`).
-pub fn get_project_claude_md_file(project_path: Option<&str>) -> PathBuf {
+/// `<project>/CLAUDE.md` — when `project_path` is `None`, uses `cwd_fallback`.
+pub fn get_project_claude_md_file(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
     match project_path {
         Some(p) => PathBuf::from(p).join("CLAUDE.md"),
-        None => std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join("CLAUDE.md"),
+        None => cwd_fallback.join("CLAUDE.md"),
     }
 }
 

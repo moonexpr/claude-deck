@@ -264,17 +264,18 @@ fn get_user_config_paths() -> Vec<PathBuf> {
 fn get_project_config_paths(project_path: &str) -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
-    let claude_dir = paths::get_project_claude_dir(Some(project_path));
+    let cwd = std::path::Path::new("");
+    let claude_dir = paths::get_project_claude_dir(Some(project_path), cwd);
     if claude_dir.exists() {
         paths.extend(rglob_files(&claude_dir));
     }
 
-    let mcp_file = paths::get_project_mcp_config_file(Some(project_path));
+    let mcp_file = paths::get_project_mcp_config_file(Some(project_path), cwd);
     if mcp_file.exists() {
         paths.push(mcp_file);
     }
 
-    let claude_md = paths::get_project_claude_md_file(Some(project_path));
+    let claude_md = paths::get_project_claude_md_file(Some(project_path), cwd);
     if claude_md.exists() {
         paths.push(claude_md);
     }

@@ -121,7 +121,10 @@ fn build_query(pairs: &[(&str, String)]) -> String {
 
 /// Replicate `shutil.which`: find an executable on PATH. Absolute/relative
 /// paths (containing a separator) are checked directly, as Python does.
-fn which(cmd: &str) -> Option<PathBuf> {
+fn which(cmd: &str, enable_external_tools: bool) -> Option<PathBuf> {
+    if !enable_external_tools {
+        return None;
+    }
     let is_exec = |p: &std::path::Path| -> bool {
         if !p.is_file() {
             return false;
@@ -336,8 +339,8 @@ fn read_user_mcp_config(project_path: Option<&str>) -> Map<String, Value> {
     servers
 }
 
-fn read_project_mcp_config(project_path: Option<&str>) -> Map<String, Value> {
-    let config = read_json_file(&paths::get_project_mcp_config_file(project_path));
+fn read_project_mcp_config(project_path: Option<&str>, cwd_fallback: &std::path::Path) -> Map<String, Value> {
+    let config = read_json_file(&paths::get_project_mcp_config_file(project_path, cwd_fallback));
     match config
         .as_ref()
         .and_then(|c| c.get("mcpServers"))
@@ -474,8 +477,8 @@ async fn write_user_mcp_config(servers: &Map<String, Value>) -> bool {
     write_json_file(&path, &config).await
 }
 
-async fn write_project_mcp_config(servers: &Map<String, Value>, project_path: Option<&str>) -> bool {
-    let path = paths::get_project_mcp_config_file(project_path);
+async fn write_project_mcp_config(servers: &Map<String, Value>, project_path: Option<&str>, cwd_fallback: &std::path::Path) -> bool {
+    let path = paths::get_project_mcp_config_file(project_path, cwd_fallback);
     let mut config = read_json_file(&path).unwrap_or_else(|| json!({}));
     if !config.is_object() {
         config = json!({});
@@ -695,7 +698,7 @@ async fn update_server_cache(
 
 // ---- server listing / retrieval --------------------------------------------
 
-async fn build_server_list(pool: &sqlx::SqlitePool, project_path: Option<&str>) -> Vec<Value> {
+async fn build_server_list(pool: &sqlx::SqlitePool, project_path: Option<&str>, cwd_fallback: &std::path::Path) -> Vec<Value> {
     let mut servers: Vec<Value> = Vec::new();
     let disabled = get_disabled_servers();
 
@@ -707,7 +710,7 @@ async fn build_server_list(pool: &sqlx::SqlitePool, project_path: Option<&str>) 
     for (name, config) in read_user_mcp_config(project_path) {
         servers.push(mcp_server_dict(&name, &config, "user"));
     }
-    for (name, config) in read_project_mcp_config(project_path) {
+    for (name, config) in read_project_mcp_config(project_path, cwd_fallback) {
         servers.push(mcp_server_dict(&name, &config, "project"));
     }
     for ps in read_plugin_mcp_servers() {
@@ -758,7 +761,7 @@ async fn build_server_list(pool: &sqlx::SqlitePool, project_path: Option<&str>) 
     servers
 }
 
-fn get_server(name: &str, scope: &str) -> Option<Value> {
+fn get_server(name: &str, scope: &str, cwd_fallback: &std::path::Path) -> Option<Value> {
     match scope {
         "managed" => {
             let servers = read_managed_mcp_config();
@@ -773,7 +776,7 @@ fn get_server(name: &str, scope: &str) -> Option<Value> {
             Some(mcp_server_dict(name, c, scope))
         }
         "project" => {
-            let servers = read_project_mcp_config(None);
+            let servers = read_project_mcp_config(None, cwd_fallback);
             let c = servers.get(name)?;
             Some(mcp_server_dict(name, c, scope))
         }
@@ -861,16 +864,17 @@ async fn list_mcp_servers(
     State(state): State<ApiState>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<Json<Value>> {
-    let servers = build_server_list(&state.pool, q.project_path.as_deref()).await;
+    let servers = build_server_list(&state.pool, q.project_path.as_deref(), &state.cwd_fallback).await;
     Ok(Json(json!({ "servers": servers })))
 }
 
 /// GET /api/v1/mcp/servers/{name}
 async fn get_mcp_server(
+    State(state): State<ApiState>,
     Path(name): Path<String>,
     Query(q): Query<ScopeQuery>,
 ) -> AppResult<Json<Value>> {
-    match get_server(&name, &q.scope) {
+    match get_server(&name, &q.scope, &state.cwd_fallback) {
         Some(s) => Ok(Json(s)),
         None => Err(AppError::not_found(format!(
             "Server '{}' not found in '{}' scope",
@@ -881,6 +885,7 @@ async fn get_mcp_server(
 
 /// POST /api/v1/mcp/servers
 async fn create_mcp_server(
+    State(state): State<ApiState>,
     Query(q): Query<ProjectPathQuery>,
     Json(server): Json<ServerCreateBody>,
 ) -> AppResult<Response> {
@@ -935,9 +940,9 @@ async fn create_mcp_server(
         servers.insert(server.name.clone(), config.clone());
         write_user_mcp_config(&servers).await
     } else {
-        let mut servers = read_project_mcp_config(q.project_path.as_deref());
+        let mut servers = read_project_mcp_config(q.project_path.as_deref(), &state.cwd_fallback);
         servers.insert(server.name.clone(), config.clone());
-        write_project_mcp_config(&servers, q.project_path.as_deref()).await
+        write_project_mcp_config(&servers, q.project_path.as_deref(), &state.cwd_fallback).await
     };
     if !written {
         return Err(AppError::internal("Failed to create server: write failed"));
@@ -949,6 +954,7 @@ async fn create_mcp_server(
 
 /// PUT /api/v1/mcp/servers/{name}
 async fn update_mcp_server(
+    State(state): State<ApiState>,
     Path(name): Path<String>,
     Query(q): Query<ScopeQuery>,
     Json(server): Json<ServerUpdateBody>,
@@ -960,7 +966,7 @@ async fn update_mcp_server(
     let mut servers = if q.scope == "user" {
         read_user_mcp_config(None)
     } else {
-        read_project_mcp_config(q.project_path.as_deref())
+        read_project_mcp_config(q.project_path.as_deref(), &state.cwd_fallback)
     };
 
     if !servers.contains_key(&name) {
@@ -996,7 +1002,7 @@ async fn update_mcp_server(
     let ok = if q.scope == "user" {
         write_user_mcp_config(&servers).await
     } else {
-        write_project_mcp_config(&servers, q.project_path.as_deref()).await
+        write_project_mcp_config(&servers, q.project_path.as_deref(), &state.cwd_fallback).await
     };
     if !ok {
         return Err(AppError::internal("Failed to update server: write failed"));
@@ -1007,6 +1013,7 @@ async fn update_mcp_server(
 
 /// DELETE /api/v1/mcp/servers/{name}
 async fn delete_mcp_server(
+    State(state): State<ApiState>,
     Path(name): Path<String>,
     Query(q): Query<ScopeQuery>,
 ) -> AppResult<Response> {
@@ -1017,7 +1024,7 @@ async fn delete_mcp_server(
     let mut servers = if q.scope == "user" {
         read_user_mcp_config(None)
     } else {
-        read_project_mcp_config(q.project_path.as_deref())
+        read_project_mcp_config(q.project_path.as_deref(), &state.cwd_fallback)
     };
 
     if servers.remove(&name).is_none() {
@@ -1030,7 +1037,7 @@ async fn delete_mcp_server(
     let ok = if q.scope == "user" {
         write_user_mcp_config(&servers).await
     } else {
-        write_project_mcp_config(&servers, q.project_path.as_deref()).await
+        write_project_mcp_config(&servers, q.project_path.as_deref(), &state.cwd_fallback).await
     };
     if !ok {
         return Err(AppError::internal("Failed to write config"));
@@ -1139,8 +1146,10 @@ async fn test_connection(
     name: &str,
     scope: &str,
     cache: bool,
+    enable_external_tools: bool,
+    cwd_fallback: &std::path::Path,
 ) -> Value {
-    let server = match get_server(name, scope) {
+    let server = match get_server(name, scope, cwd_fallback) {
         Some(s) => s,
         None => return fail(format!("Server '{}' not found", name)),
     };
@@ -1151,7 +1160,7 @@ async fn test_connection(
             Some(c) if !c.is_empty() => c.to_string(),
             _ => return fail("No command specified for stdio server"),
         };
-        if which(&command).is_none() {
+        if which(&command, enable_external_tools).is_none() {
             return fail(format!("Command '{}' not found in PATH", command));
         }
         let args: Vec<String> = server
@@ -1747,7 +1756,7 @@ async fn test_mcp_server_connection(
             "Server scope must be 'user', 'project', 'plugin', or 'managed'",
         ));
     }
-    let result = test_connection(&state.pool, &name, &q.scope, true).await;
+    let result = test_connection(&state.pool, &name, &q.scope, true, state.enable_external_tools, &state.cwd_fallback).await;
     Ok(Json(test_response_body(&result)))
 }
 
@@ -1756,12 +1765,12 @@ async fn test_all_servers(
     State(state): State<ApiState>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<Json<Value>> {
-    let servers = build_server_list(&state.pool, q.project_path.as_deref()).await;
+    let servers = build_server_list(&state.pool, q.project_path.as_deref(), &state.cwd_fallback).await;
     let mut results = Vec::new();
     for s in &servers {
         let name = s["name"].as_str().unwrap_or("").to_string();
         let scope = s["scope"].as_str().unwrap_or("").to_string();
-        let tr = test_connection(&state.pool, &name, &scope, true).await;
+        let tr = test_connection(&state.pool, &name, &scope, true, state.enable_external_tools, &state.cwd_fallback).await;
         results.push(json!({
             "server_name": name,
             "scope": scope,
@@ -2415,11 +2424,12 @@ struct AuthStartQuery {
 
 /// POST /api/v1/mcp/servers/{name}/auth/start
 async fn start_auth(
+    State(state): State<ApiState>,
     Path(name): Path<String>,
     Query(q): Query<AuthStartQuery>,
     headers: HeaderMap,
 ) -> AppResult<Json<Value>> {
-    let server = get_server(&name, &q.scope).ok_or_else(|| {
+    let server = get_server(&name, &q.scope, &state.cwd_fallback).ok_or_else(|| {
         AppError::not_found(format!("Server '{}' not found in '{}' scope", name, q.scope))
     })?;
     let url = match str_field(&server, "url") {
@@ -2718,6 +2728,7 @@ fn generate_remote_config(
 
 /// POST /api/v1/mcp/registry/install
 async fn install_registry_server(
+    State(state): State<ApiState>,
     Query(q): Query<ProjectPathQuery>,
     Json(req): Json<RegistryInstallBody>,
 ) -> AppResult<Json<Value>> {
@@ -2763,9 +2774,9 @@ async fn install_registry_server(
         servers.insert(req.server_name.clone(), config.clone());
         write_user_mcp_config(&servers).await
     } else {
-        let mut servers = read_project_mcp_config(q.project_path.as_deref());
+        let mut servers = read_project_mcp_config(q.project_path.as_deref(), &state.cwd_fallback);
         servers.insert(req.server_name.clone(), config.clone());
-        write_project_mcp_config(&servers, q.project_path.as_deref()).await
+        write_project_mcp_config(&servers, q.project_path.as_deref(), &state.cwd_fallback).await
     };
     if !written {
         return Err(AppError::internal("Failed to install server: write failed"));

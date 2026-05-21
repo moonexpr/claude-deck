@@ -1,7 +1,7 @@
 // PORTED: output_style_service.py + api/v1/output_styles.py
 
 use axum::{
-    extract::{Json, Path, Query},
+    extract::{Json, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
@@ -297,11 +297,11 @@ fn is_date_like(s: &str) -> bool {
         && b[8..10].iter().all(|c| c.is_ascii_digit())
 }
 
-fn base_dir_for(scope: &str, project_path: Option<&str>) -> PathBuf {
+fn base_dir_for(scope: &str, project_path: Option<&str>, cwd_fallback: &std::path::Path) -> PathBuf {
     if scope == "user" {
         paths::get_claude_user_output_styles_dir()
     } else {
-        paths::get_project_output_styles_dir(project_path)
+        paths::get_project_output_styles_dir(project_path, cwd_fallback)
     }
 }
 
@@ -343,7 +343,7 @@ async fn list_output_styles(Query(q): Query<ProjectPathQuery>) -> AppResult<Json
     }
 
     if let Some(pp) = q.project_path.as_deref() {
-        let proj_dir = paths::get_project_output_styles_dir(Some(pp));
+        let proj_dir = paths::get_project_output_styles_dir(Some(pp), std::path::Path::new(""));
         if proj_dir.exists() {
             scan_styles_dir(&proj_dir, "project", &mut styles);
         }
@@ -382,13 +382,14 @@ fn scan_styles_dir(base: &std::path::Path, scope: &str, out: &mut Vec<Value>) {
 
 /// GET /api/v1/output-styles/{scope}/{name}
 async fn get_output_style(
+    State(state): State<ApiState>,
     Path((scope, name)): Path<(String, String)>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<Json<Value>> {
     if scope != "user" && scope != "project" {
         return Err(AppError::bad_request("Scope must be 'user' or 'project'"));
     }
-    let base = base_dir_for(&scope, q.project_path.as_deref());
+    let base = base_dir_for(&scope, q.project_path.as_deref(), &state.cwd_fallback);
     match read_style(&base, &scope, &name) {
         Some(v) => Ok(Json(v)),
         None => Err(AppError::not_found(format!(
@@ -400,6 +401,7 @@ async fn get_output_style(
 
 /// POST /api/v1/output-styles
 async fn create_output_style(
+    State(state): State<ApiState>,
     Query(q): Query<ProjectPathQuery>,
     Json(style): Json<OutputStyleCreate>,
 ) -> AppResult<impl IntoResponse> {
@@ -412,7 +414,7 @@ async fn create_output_style(
         ));
     }
 
-    let base = base_dir_for(&style.scope, q.project_path.as_deref());
+    let base = base_dir_for(&style.scope, q.project_path.as_deref(), &state.cwd_fallback);
     let file_path = base.join(format!("{}.md", style.name));
 
     if file_path.exists() {
@@ -455,6 +457,7 @@ async fn create_output_style(
 
 /// PUT /api/v1/output-styles/{scope}/{name}
 async fn update_output_style(
+    State(state): State<ApiState>,
     Path((scope, name)): Path<(String, String)>,
     Query(q): Query<ProjectPathQuery>,
     Json(update): Json<OutputStyleUpdate>,
@@ -463,7 +466,7 @@ async fn update_output_style(
         return Err(AppError::bad_request("Scope must be 'user' or 'project'"));
     }
 
-    let base = base_dir_for(&scope, q.project_path.as_deref());
+    let base = base_dir_for(&scope, q.project_path.as_deref(), &state.cwd_fallback);
     let file_path = base.join(format!("{}.md", name));
     if !file_path.exists() {
         return Err(AppError::not_found(format!(
@@ -510,6 +513,7 @@ fn upsert_meta(metadata: &mut Vec<(String, Meta)>, key: &str, value: Meta) {
 
 /// DELETE /api/v1/output-styles/{scope}/{name}
 async fn delete_output_style(
+    State(state): State<ApiState>,
     Path((scope, name)): Path<(String, String)>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<impl IntoResponse> {
@@ -517,7 +521,7 @@ async fn delete_output_style(
         return Err(AppError::bad_request("Scope must be 'user' or 'project'"));
     }
 
-    let base = base_dir_for(&scope, q.project_path.as_deref());
+    let base = base_dir_for(&scope, q.project_path.as_deref(), &state.cwd_fallback);
     let file_path = base.join(format!("{}.md", name));
     if !file_path.exists() {
         return Err(AppError::not_found(format!(

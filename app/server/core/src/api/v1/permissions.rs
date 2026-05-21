@@ -255,7 +255,7 @@ fn list_permissions_core(project_path: Option<&str>) -> (Vec<Rule>, Value) {
 
     // Project-level (overrides / merges user).
     if let Some(pp) = project_path {
-        let proj_path = paths::get_project_settings_file(Some(pp));
+        let proj_path = paths::get_project_settings_file(Some(pp), std::path::Path::new(""));
         if let Some(proj_settings) = read_json_file(&proj_path) {
             if let Some(perms) = proj_settings.get("permissions").and_then(|v| v.as_object()) {
                 if let Some(dm) = perms.get("defaultMode") {
@@ -320,7 +320,7 @@ fn settings_path_for(
         Ok(paths::get_claude_user_settings_file())
     } else {
         match project_path {
-            Some(pp) => Ok(paths::get_project_settings_file(Some(pp))),
+            Some(pp) => Ok(paths::get_project_settings_file(Some(pp), std::path::Path::new(""))),
             None => Err(AppError::bad_request(
                 "project_path is required for project scope",
             )),
@@ -473,7 +473,7 @@ async fn add_permission_core(
     let settings_path = if rule.scope == "user" {
         paths::get_claude_user_settings_file()
     } else if let Some(pp) = project_path {
-        paths::get_project_settings_file(Some(pp))
+        paths::get_project_settings_file(Some(pp), std::path::Path::new(""))
     } else {
         return Err(AppError::bad_request(
             "project_path is required for project scope",
@@ -650,7 +650,7 @@ async fn remove_permission_core(
     let settings_path = if scope == "user" {
         paths::get_claude_user_settings_file()
     } else if let Some(pp) = project_path {
-        paths::get_project_settings_file(Some(pp))
+        paths::get_project_settings_file(Some(pp), std::path::Path::new(""))
     } else {
         return Err(AppError::bad_request(
             "project_path is required for project scope",

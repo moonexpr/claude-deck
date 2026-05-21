@@ -12,8 +12,6 @@ use axum::{
     Json,
 };
 use sqlx::sqlite::SqlitePoolOptions;
-use std::net::SocketAddr;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use tower_http::services::ServeDir;
 use tower_http::cors::{CorsLayer, Any};
 use std::path::PathBuf;
@@ -26,23 +24,39 @@ struct HealthResponse {
     status: String,
 }
 
-pub async fn run() -> anyhow::Result<()> {
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
-        ))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+/// Configuration supplied by the embedder (or `server-bin`). All env/process
+/// reads happen in the caller; `server-core` is purely config-in, Router-out.
+pub struct ServerConfig {
+    /// SQLite connection string, e.g. `sqlite:claude_registry.db?mode=rwc`.
+    pub db_url: String,
+    /// Absolute path to the Claude projects directory (e.g. `~/.claude/projects`).
+    pub projects_dir: PathBuf,
+    /// When `Some`, mount `ServeDir` at this path for static frontend files.
+    /// When `None`, skip frontend serving (API routes still mount).
+    pub frontend_dist_path: Option<PathBuf>,
+    /// Override base URL for presence event hooks (e.g. `https://deck.example.com`).
+    pub presence_public_url: Option<String>,
+    /// Anthropic API key — carried through for future phases; unused for now.
+    pub anthropic_api_key: Option<String>,
+    /// When `false`, PATH-dependent external-tool discovery is skipped and
+    /// affected routes return the same empty/default result a missing tool yields.
+    pub enable_external_tools: bool,
+    /// Working-directory fallback used when a handler needs a CWD-relative base
+    /// path and no `project_path` query param was supplied. Captured once by
+    /// `server-bin` from `std::env::current_dir()` so the library never reads it.
+    pub cwd_fallback: PathBuf,
+}
 
-    dotenvy::dotenv().ok();
-
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "sqlite:claude_registry.db?mode=rwc".to_string());
-
+/// Build the axum `Router` from the supplied config.
+///
+/// This function creates the SQLite pool, runs schema bootstrap, configures
+/// CORS, and assembles all route modules. It does NOT init tracing, call
+/// `dotenvy`, or bind a socket — those responsibilities belong to the caller.
+pub async fn app(config: ServerConfig) -> anyhow::Result<axum::Router> {
     // Setup database pool
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
-        .connect(&database_url)
+        .connect(&config.db_url)
         .await?;
 
     // Schema bootstrap. Per-module ensure functions create projects/backups/
@@ -88,13 +102,6 @@ pub async fn run() -> anyhow::Result<()> {
     .execute(&pool)
     .await?;
 
-    // Determine frontend path
-    let mut frontend_dist = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    frontend_dist.pop(); // Up from backend
-    frontend_dist.push("frontend/dist");
-
-    let index_path = frontend_dist.join("index.html");
-
     // Configure CORS
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -102,26 +109,22 @@ pub async fn run() -> anyhow::Result<()> {
         .allow_headers(Any);
 
     // Build our application
-    let app = Router::new()
+    let mut router = Router::new()
         .route("/health", get(health))
-        .nest("/api/v1", api::v1::router(pool))
-        .fallback_service(
+        .nest("/api/v1", api::v1::router(pool, config.projects_dir, config.presence_public_url, config.enable_external_tools, config.cwd_fallback))
+        .layer(cors);
+
+    // Mount static frontend serving only when a dist path was supplied.
+    if let Some(frontend_dist) = config.frontend_dist_path {
+        let index_path = frontend_dist.join("index.html");
+        router = router.fallback_service(
             ServeDir::new(frontend_dist)
                 .append_index_html_on_directories(true)
                 .not_found_service(tower_http::services::ServeFile::new(index_path))
-        )
-        .layer(cors);
+        );
+    }
 
-    // Run it with hyper
-    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
-    let port = std::env::var("PORT").unwrap_or_else(|_| "8000".to_string());
-    let addr: SocketAddr = format!("{}:{}", host, port).parse()?;
-
-    tracing::info!("listening on {}", addr);
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
-
-    Ok(())
+    Ok(router)
 }
 
 async fn health() -> Json<HealthResponse> {

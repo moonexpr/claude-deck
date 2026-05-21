@@ -14,7 +14,7 @@
 // `yaml.YAMLError` fallback. If full fidelity is required, add `serde_yaml`.
 
 use axum::{
-    extract::{Json, Query},
+    extract::{Json, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -704,7 +704,7 @@ fn scan_agents_dir(base_dir: &Path, scope: &str) -> Vec<Value> {
     agents
 }
 
-fn service_list_agents(project_path: Option<&str>) -> Vec<Value> {
+fn service_list_agents(project_path: Option<&str>, cwd_fallback: &Path) -> Vec<Value> {
     let mut agents = Vec::new();
 
     let user_agents_dir = paths::get_claude_user_agents_dir();
@@ -713,7 +713,7 @@ fn service_list_agents(project_path: Option<&str>) -> Vec<Value> {
     }
 
     if let Some(pp) = project_path {
-        let project_agents_dir = paths::get_project_agents_dir(Some(pp));
+        let project_agents_dir = paths::get_project_agents_dir(Some(pp), cwd_fallback);
         if project_agents_dir.exists() {
             agents.extend(scan_agents_dir(&project_agents_dir, "project"));
         }
@@ -731,16 +731,16 @@ fn service_list_agents(project_path: Option<&str>) -> Vec<Value> {
     agents
 }
 
-fn agent_base_dir(scope: &str, project_path: Option<&str>) -> PathBuf {
+fn agent_base_dir(scope: &str, project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
     if scope == "user" {
         paths::get_claude_user_agents_dir()
     } else {
-        paths::get_project_agents_dir(project_path)
+        paths::get_project_agents_dir(project_path, cwd_fallback)
     }
 }
 
-fn service_get_agent(scope: &str, name: &str, project_path: Option<&str>) -> Option<Value> {
-    let base_dir = agent_base_dir(scope, project_path);
+fn service_get_agent(scope: &str, name: &str, project_path: Option<&str>, cwd_fallback: &Path) -> Option<Value> {
+    let base_dir = agent_base_dir(scope, project_path, cwd_fallback);
     let file_path = base_dir.join(format!("{}.md", name));
     if !file_path.exists() {
         return None;
@@ -1117,7 +1117,10 @@ fn dep_get_skill_file(
     None
 }
 
-fn which(name: &str) -> Option<PathBuf> {
+fn which(name: &str, enable_external_tools: bool) -> Option<PathBuf> {
+    if !enable_external_tools {
+        return None;
+    }
     let path_var = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path_var) {
         let candidate = dir.join(name);
@@ -1165,8 +1168,8 @@ fn run_cmd(cmd: &str, args: &[&str], timeout_secs: u64, cwd: Option<&Path>) -> O
     }
 }
 
-fn check_binary(name: &str) -> (bool, Option<String>) {
-    if which(name).is_none() {
+fn check_binary(name: &str, enable_external_tools: bool) -> (bool, Option<String>) {
+    if which(name, enable_external_tools).is_none() {
         return (false, None);
     }
     let mut version = None;
@@ -1217,13 +1220,13 @@ fn pip_show(cmd: &str, name: &str) -> Option<(bool, Option<String>)> {
     Some((false, None))
 }
 
-fn check_pip_package(name: &str) -> (bool, Option<String>) {
-    if which("pip").is_some() {
+fn check_pip_package(name: &str, enable_external_tools: bool) -> (bool, Option<String>) {
+    if which("pip", enable_external_tools).is_some() {
         if let Some(r) = pip_show("pip", name) {
             return r;
         }
     }
-    if which("pip3").is_some() {
+    if which("pip3", enable_external_tools).is_some() {
         if let Some(r) = pip_show("pip3", name) {
             return r;
         }
@@ -1241,7 +1244,7 @@ fn dep_obj(kind: &str, name: &str, installed: bool, installed_version: Option<St
     })
 }
 
-fn check_dependencies(name: &str, location: &str, project_path: Option<&str>) -> Value {
+fn check_dependencies(name: &str, location: &str, project_path: Option<&str>, enable_external_tools: bool) -> Value {
     let mut dependencies: Vec<Value> = Vec::new();
     let mut has_install_script = false;
     let mut install_script_path: Value = Value::Null;
@@ -1280,7 +1283,7 @@ fn check_dependencies(name: &str, location: &str, project_path: Option<&str>) ->
                 .unwrap_or_default();
             for b in &bins {
                 if let Some(bin_name) = b.as_str() {
-                    let (installed, version) = check_binary(bin_name);
+                    let (installed, version) = check_binary(bin_name, enable_external_tools);
                     dependencies.push(dep_obj("bin", bin_name, installed, version));
                 }
             }
@@ -1304,7 +1307,7 @@ fn check_dependencies(name: &str, location: &str, project_path: Option<&str>) ->
                 .unwrap_or_default();
             for p in &pip_deps {
                 if let Some(pkg) = p.as_str() {
-                    let (installed, version) = check_pip_package(pkg);
+                    let (installed, version) = check_pip_package(pkg, enable_external_tools);
                     dependencies.push(dep_obj("pip", pkg, installed, version));
                 }
             }
@@ -1332,7 +1335,7 @@ fn check_dependencies(name: &str, location: &str, project_path: Option<&str>) ->
                     let (installed, version) = check_npm_package(pkg);
                     dependencies.push(dep_obj("npm", pkg, installed, version));
                 } else if kind == "pip" {
-                    let (installed, version) = check_pip_package(pkg);
+                    let (installed, version) = check_pip_package(pkg, enable_external_tools);
                     dependencies.push(dep_obj("pip", pkg, installed, version));
                 } else if kind == "brew" || kind == "apt" {
                     let check_bins = install_def
@@ -1346,7 +1349,7 @@ fn check_dependencies(name: &str, location: &str, project_path: Option<&str>) ->
                                 .iter()
                                 .any(|d| d["name"].as_str() == Some(bin_name))
                             {
-                                let (installed, version) = check_binary(bin_name);
+                                let (installed, version) = check_binary(bin_name, enable_external_tools);
                                 dependencies.push(dep_obj("bin", bin_name, installed, version));
                             }
                         }
@@ -1448,8 +1451,8 @@ fn list_supporting_files(name: &str, location: &str, project_path: Option<&str>)
     files
 }
 
-fn install_dependencies(name: &str, location: &str, project_path: Option<&str>) -> Value {
-    let status = check_dependencies(name, location, project_path);
+fn install_dependencies(name: &str, location: &str, project_path: Option<&str>, enable_external_tools: bool) -> Value {
+    let status = check_dependencies(name, location, project_path, enable_external_tools);
 
     if status["all_satisfied"].as_bool().unwrap_or(false) {
         return json!({
@@ -1551,7 +1554,7 @@ fn install_dependencies(name: &str, location: &str, project_path: Option<&str>) 
             continue;
         }
         let dname = dep["name"].as_str().unwrap_or("");
-        let pip_cmd = if which("pip3").is_some() { "pip3" } else { "pip" };
+        let pip_cmd = if which("pip3", enable_external_tools).is_some() { "pip3" } else { "pip" };
         all_logs.push(format!("\n=== {} install {} ===", pip_cmd, dname));
         match run_cmd(pip_cmd, &["install", dname], 60, None) {
             Some(out) => {
@@ -2101,8 +2104,11 @@ struct SkillDetailQuery {
 // ---- handlers ---------------------------------------------------------------
 
 /// GET /api/v1/agents
-async fn list_agents(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<Value>> {
-    let agents = service_list_agents(q.project_path.as_deref());
+async fn list_agents(
+    State(state): State<ApiState>,
+    Query(q): Query<ProjectPathQuery>,
+) -> AppResult<Json<Value>> {
+    let agents = service_list_agents(q.project_path.as_deref(), &state.cwd_fallback);
     Ok(Json(json!({ "agents": agents })))
 }
 
@@ -2114,6 +2120,7 @@ async fn list_skills(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<Value>
 
 /// GET /api/v1/agents/skills/{location}/{name}
 async fn get_skill(
+    State(state): State<ApiState>,
     axum::extract::Path((location, name)): axum::extract::Path<(String, String)>,
     Query(q): Query<SkillDetailQuery>,
 ) -> AppResult<Json<Value>> {
@@ -2127,7 +2134,7 @@ async fn get_skill(
 
     if q.include_deps {
         skill["dependency_status"] =
-            check_dependencies(&name, &location, q.project_path.as_deref());
+            check_dependencies(&name, &location, q.project_path.as_deref(), state.enable_external_tools);
         skill["supporting_files"] = Value::Array(list_supporting_files(
             &name,
             &location,
@@ -2140,6 +2147,7 @@ async fn get_skill(
 
 /// GET /api/v1/agents/skills/{location}/{name}/dependencies
 async fn check_skill_dependencies(
+    State(state): State<ApiState>,
     axum::extract::Path((location, name)): axum::extract::Path<(String, String)>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<Json<Value>> {
@@ -2153,11 +2161,13 @@ async fn check_skill_dependencies(
         &name,
         &location,
         q.project_path.as_deref(),
+        state.enable_external_tools,
     )))
 }
 
 /// POST /api/v1/agents/skills/{location}/{name}/install
 async fn install_skill_dependencies(
+    State(state): State<ApiState>,
     axum::extract::Path((location, name)): axum::extract::Path<(String, String)>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<Json<Value>> {
@@ -2170,8 +2180,9 @@ async fn install_skill_dependencies(
     let pp = q.project_path.clone();
     let loc = location.clone();
     let nm = name.clone();
+    let ext = state.enable_external_tools;
     let result =
-        tokio::task::spawn_blocking(move || install_dependencies(&nm, &loc, pp.as_deref()))
+        tokio::task::spawn_blocking(move || install_dependencies(&nm, &loc, pp.as_deref(), ext))
             .await
             .map_err(|e| AppError::internal(e.to_string()))?;
     Ok(Json(result))
@@ -2244,13 +2255,14 @@ async fn install_registry_skill(
 
 /// GET /api/v1/agents/{scope}/{name}
 async fn get_agent(
+    State(state): State<ApiState>,
     axum::extract::Path((scope, name)): axum::extract::Path<(String, String)>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<Json<Value>> {
     if scope != "user" && scope != "project" {
         return Err(AppError::bad_request("Scope must be 'user' or 'project'"));
     }
-    let agent = service_get_agent(&scope, &name, q.project_path.as_deref())
+    let agent = service_get_agent(&scope, &name, q.project_path.as_deref(), &state.cwd_fallback)
         .ok_or_else(|| {
             AppError::not_found(format!("Agent '{}' not found in {} scope", name, scope))
         })?;
@@ -2259,6 +2271,7 @@ async fn get_agent(
 
 /// POST /api/v1/agents
 async fn create_agent(
+    State(state): State<ApiState>,
     Query(q): Query<ProjectPathQuery>,
     Json(agent): Json<AgentCreate>,
 ) -> AppResult<impl IntoResponse> {
@@ -2274,7 +2287,7 @@ async fn create_agent(
     let base_dir = if agent.scope == "user" {
         paths::get_claude_user_agents_dir()
     } else {
-        paths::get_project_agents_dir(q.project_path.as_deref())
+        paths::get_project_agents_dir(q.project_path.as_deref(), &state.cwd_fallback)
     };
     let file_path = base_dir.join(format!("{}.md", agent.name));
 
@@ -2358,6 +2371,7 @@ async fn create_agent(
 
 /// PUT /api/v1/agents/{scope}/{name}
 async fn update_agent(
+    State(state): State<ApiState>,
     axum::extract::Path((scope, name)): axum::extract::Path<(String, String)>,
     Query(q): Query<ProjectPathQuery>,
     Json(upd): Json<AgentUpdate>,
@@ -2366,7 +2380,7 @@ async fn update_agent(
         return Err(AppError::bad_request("Scope must be 'user' or 'project'"));
     }
 
-    let base_dir = agent_base_dir(&scope, q.project_path.as_deref());
+    let base_dir = agent_base_dir(&scope, q.project_path.as_deref(), &state.cwd_fallback);
     let file_path = base_dir.join(format!("{}.md", name));
     if !file_path.exists() {
         return Err(AppError::not_found(format!(
@@ -2449,6 +2463,7 @@ async fn update_agent(
 
 /// DELETE /api/v1/agents/{scope}/{name}
 async fn delete_agent(
+    State(state): State<ApiState>,
     axum::extract::Path((scope, name)): axum::extract::Path<(String, String)>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<impl IntoResponse> {
@@ -2456,7 +2471,7 @@ async fn delete_agent(
         return Err(AppError::bad_request("Scope must be 'user' or 'project'"));
     }
 
-    let base_dir = agent_base_dir(&scope, q.project_path.as_deref());
+    let base_dir = agent_base_dir(&scope, q.project_path.as_deref(), &state.cwd_fallback);
     let file_path = base_dir.join(format!("{}.md", name));
     if !file_path.exists() {
         return Err(AppError::not_found(format!(

@@ -420,8 +420,9 @@ async fn discover_projects(Json(req): Json<ProjectDiscoveryRequest>) -> AppResul
     // Phase 1: .claude/ dir or .mcp.json file => "configured"
     for directory in &dirs_to_check {
         let dir_str = directory.to_string_lossy().into_owned();
-        let claude_dir = paths::get_project_claude_dir(Some(&dir_str));
-        let mcp_file = paths::get_project_mcp_config_file(Some(&dir_str));
+        let cwd = std::path::Path::new("");
+        let claude_dir = paths::get_project_claude_dir(Some(&dir_str), cwd);
+        let mcp_file = paths::get_project_mcp_config_file(Some(&dir_str), cwd);
         if claude_dir.exists() || mcp_file.exists() {
             let name = directory
                 .file_name()

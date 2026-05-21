@@ -6,7 +6,7 @@
 // against them). Paths via `crate::paths`, errors via `crate::error::AppError`.
 
 use axum::{
-    extract::{Json, Query},
+    extract::{Json, Query, State},
     routing::{delete, get, post, put},
     Router,
 };
@@ -80,30 +80,26 @@ fn get_managed_claude_md() -> PathBuf {
     PathBuf::from("/etc/claude-code/CLAUDE.md")
 }
 
-fn get_project_claude_md(project_path: Option<&str>) -> PathBuf {
+fn get_project_claude_md(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
     match project_path {
         Some(p) => PathBuf::from(p).join("CLAUDE.md"),
-        None => std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join("CLAUDE.md"),
+        None => cwd_fallback.join("CLAUDE.md"),
     }
 }
 
-fn get_project_alt_claude_md(project_path: Option<&str>) -> PathBuf {
-    paths::get_project_claude_dir(project_path).join("CLAUDE.md")
+fn get_project_alt_claude_md(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
+    paths::get_project_claude_dir(project_path, cwd_fallback).join("CLAUDE.md")
 }
 
-fn get_local_claude_md(project_path: Option<&str>) -> PathBuf {
+fn get_local_claude_md(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
     match project_path {
         Some(p) => PathBuf::from(p).join("CLAUDE.local.md"),
-        None => std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join("CLAUDE.local.md"),
+        None => cwd_fallback.join("CLAUDE.local.md"),
     }
 }
 
-fn get_rules_dir(project_path: Option<&str>) -> PathBuf {
-    paths::get_project_claude_dir(project_path).join("rules")
+fn get_rules_dir(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
+    paths::get_project_claude_dir(project_path, cwd_fallback).join("rules")
 }
 
 /// Python `Path(p).expanduser()` — expand a leading `~` to the home dir.
@@ -118,9 +114,7 @@ fn expanduser(p: &str) -> PathBuf {
 }
 
 fn home_dir() -> PathBuf {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/"))
+    crate::paths::get_user_home()
 }
 
 /// Recursively collect `*.md` files under `dir`, sorted (Python
@@ -331,7 +325,7 @@ fn is_word_path_char(b: u8) -> bool {
 
 // ---- core service ports -----------------------------------------------------
 
-fn memory_hierarchy(project_path: Option<&str>) -> Vec<Value> {
+fn memory_hierarchy(project_path: Option<&str>, cwd_fallback: &Path) -> Vec<Value> {
     let mut files: Vec<Value> = Vec::new();
 
     let managed = get_managed_claude_md();
@@ -354,8 +348,8 @@ fn memory_hierarchy(project_path: Option<&str>) -> Vec<Value> {
         "description": "Personal preferences (all projects)",
     }));
 
-    let proj = get_project_claude_md(project_path);
-    let proj_alt = get_project_alt_claude_md(project_path);
+    let proj = get_project_claude_md(project_path, cwd_fallback);
+    let proj_alt = get_project_alt_claude_md(project_path, cwd_fallback);
     if proj.exists() {
         files.push(json!({
             "path": proj.to_string_lossy(),
@@ -385,7 +379,7 @@ fn memory_hierarchy(project_path: Option<&str>) -> Vec<Value> {
         }));
     }
 
-    let local = get_local_claude_md(project_path);
+    let local = get_local_claude_md(project_path, cwd_fallback);
     files.push(json!({
         "path": local.to_string_lossy(),
         "scope": "local",
@@ -395,7 +389,7 @@ fn memory_hierarchy(project_path: Option<&str>) -> Vec<Value> {
         "description": "Personal project-specific preferences (gitignored)",
     }));
 
-    let rules_dir = get_rules_dir(project_path);
+    let rules_dir = get_rules_dir(project_path, cwd_fallback);
     if rules_dir.exists() {
         for rule_file in rglob_md(&rules_dir) {
             let rel = rule_file
@@ -515,8 +509,8 @@ fn delete_memory(file_path: &str) -> Value {
     }
 }
 
-fn rules_list(project_path: Option<&str>) -> Vec<Value> {
-    let rules_dir = get_rules_dir(project_path);
+fn rules_list(project_path: Option<&str>, cwd_fallback: &Path) -> Vec<Value> {
+    let rules_dir = get_rules_dir(project_path, cwd_fallback);
     let mut rules: Vec<Value> = Vec::new();
     if !rules_dir.exists() {
         return rules;
@@ -568,8 +562,9 @@ fn create_rule_file(
     content: &str,
     rule_paths: Option<&[String]>,
     description: Option<&str>,
+    cwd_fallback: &Path,
 ) -> Result<Value, AppError> {
-    let rules_dir = get_rules_dir(project_path);
+    let rules_dir = get_rules_dir(project_path, cwd_fallback);
     if let Err(e) = std::fs::create_dir_all(&rules_dir) {
         return Err(AppError::internal(e.to_string()));
     }
@@ -637,7 +632,11 @@ fn auto_memory(project_path: &str) -> Value {
     })
 }
 
-fn resolve_import_tree(file_path: &str, visited: &mut BTreeSet<String>) -> Value {
+fn resolve_import_tree(
+    file_path: &str,
+    visited: &mut BTreeSet<String>,
+    cwd_fallback: &Path,
+) -> Value {
     let path = expanduser(file_path);
     let path_str = path.to_string_lossy().into_owned();
     let resolved_str = std::fs::canonicalize(&path)
@@ -648,8 +647,7 @@ fn resolve_import_tree(file_path: &str, visited: &mut BTreeSet<String>) -> Value
             if path.is_absolute() {
                 path_str.clone()
             } else {
-                std::env::current_dir()
-                    .unwrap_or_else(|_| PathBuf::from("."))
+                cwd_fallback
                     .join(&path)
                     .to_string_lossy()
                     .into_owned()
@@ -694,17 +692,18 @@ fn resolve_import_tree(file_path: &str, visited: &mut BTreeSet<String>) -> Value
                         if joined.is_absolute() {
                             joined.clone()
                         } else {
-                            std::env::current_dir()
-                                .unwrap_or_else(|_| PathBuf::from("."))
-                                .join(&joined)
+                            cwd_fallback.join(&joined)
                         }
                     })
                 } else {
                     PathBuf::from(&imp)
                 };
                 let mut branch = visited.clone();
-                import_nodes
-                    .push(resolve_import_tree(&imp_path.to_string_lossy(), &mut branch));
+                import_nodes.push(resolve_import_tree(
+                    &imp_path.to_string_lossy(),
+                    &mut branch,
+                    cwd_fallback,
+                ));
             }
             result.insert("imports".into(), Value::Array(import_nodes));
         }
@@ -719,8 +718,11 @@ fn resolve_import_tree(file_path: &str, visited: &mut BTreeSet<String>) -> Value
 // ---- handlers ---------------------------------------------------------------
 
 /// GET /api/v1/memory/hierarchy
-async fn get_memory_hierarchy(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<Value>> {
-    let files = memory_hierarchy(q.project_path.as_deref());
+async fn get_memory_hierarchy(
+    State(state): State<ApiState>,
+    Query(q): Query<ProjectPathQuery>,
+) -> AppResult<Json<Value>> {
+    let files = memory_hierarchy(q.project_path.as_deref(), &state.cwd_fallback);
     Ok(Json(json!({ "files": files })))
 }
 
@@ -761,10 +763,13 @@ async fn delete_memory_file(Query(q): Query<FilePathOnlyQuery>) -> AppResult<Jso
 }
 
 /// GET /api/v1/memory/rules
-async fn list_rules(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<Value>> {
+async fn list_rules(
+    State(state): State<ApiState>,
+    Query(q): Query<ProjectPathQuery>,
+) -> AppResult<Json<Value>> {
     let pp = q.project_path.as_deref();
-    let rules = rules_list(pp);
-    let rules_dir = get_rules_dir(pp);
+    let rules = rules_list(pp, &state.cwd_fallback);
+    let rules_dir = get_rules_dir(pp, &state.cwd_fallback);
     Ok(Json(json!({
         "rules": rules,
         "rules_dir": rules_dir.to_string_lossy(),
@@ -773,6 +778,7 @@ async fn list_rules(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<Value>>
 
 /// POST /api/v1/memory/rules
 async fn create_rule(
+    State(state): State<ApiState>,
     Query(q): Query<ProjectPathQuery>,
     Json(req): Json<CreateRuleRequest>,
 ) -> AppResult<Json<Value>> {
@@ -782,6 +788,7 @@ async fn create_rule(
         &req.content,
         req.paths.as_deref(),
         req.description.as_deref(),
+        &state.cwd_fallback,
     )?;
     if result.get("success").and_then(|v| v.as_bool()) != Some(true) {
         let msg = result
@@ -805,8 +812,11 @@ struct FilePathProjectQuery {
 }
 
 /// GET /api/v1/memory/imports
-async fn resolve_imports(Query(q): Query<FilePathOnlyQuery>) -> AppResult<Json<Value>> {
+async fn resolve_imports(
+    State(state): State<ApiState>,
+    Query(q): Query<FilePathOnlyQuery>,
+) -> AppResult<Json<Value>> {
     let mut visited = BTreeSet::new();
-    let tree = resolve_import_tree(&q.file_path, &mut visited);
+    let tree = resolve_import_tree(&q.file_path, &mut visited, &state.cwd_fallback);
     Ok(Json(json!({ "tree": tree })))
 }

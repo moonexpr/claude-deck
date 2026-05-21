@@ -32,20 +32,31 @@ use crate::services::session_service::SessionService;
 pub struct ApiState {
     pub pool: SqlitePool,
     pub session_service: Arc<SessionService>,
+    /// Override base URL for presence event hook snippet generation.
+    /// `None` means derive from the incoming request's `Host` header.
+    pub presence_public_url: Option<String>,
+    /// When `false`, PATH-dependent external-tool discovery is skipped in
+    /// agents, cli, mcp, and plugins routes.
+    pub enable_external_tools: bool,
+    /// CWD fallback used when handlers need a base path and no `project_path`
+    /// query param was provided. Captured once by the embedder; never via
+    /// `std::env::current_dir()` inside the library.
+    pub cwd_fallback: PathBuf,
 }
 
-pub fn router(pool: SqlitePool) -> Router {
-    let projects_dir = std::env::var("PROJECTS_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let mut p = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
-            p.push(".claude/projects");
-            p
-        });
-
+pub fn router(
+    pool: SqlitePool,
+    projects_dir: PathBuf,
+    presence_public_url: Option<String>,
+    enable_external_tools: bool,
+    cwd_fallback: PathBuf,
+) -> Router {
     let state = ApiState {
         pool,
         session_service: Arc::new(SessionService::new(projects_dir)),
+        presence_public_url,
+        enable_external_tools,
+        cwd_fallback,
     };
 
     Router::new()

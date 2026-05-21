@@ -7,7 +7,7 @@
 // commands (it builds `base_dir / path` directly) — behavior matched 1:1.
 
 use axum::{
-    extract::{Json, Path as AxumPath, Query},
+    extract::{Json, Path as AxumPath, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
@@ -474,7 +474,7 @@ fn scan_plugin_commands() -> Vec<Value> {
 }
 
 /// Port of `CommandService.list_commands`.
-fn list_commands_impl(project_path: Option<&str>) -> Vec<Value> {
+fn list_commands_impl(project_path: Option<&str>, cwd_fallback: &Path) -> Vec<Value> {
     let mut commands = Vec::new();
 
     let user_commands_dir = paths::get_claude_user_commands_dir();
@@ -483,7 +483,7 @@ fn list_commands_impl(project_path: Option<&str>) -> Vec<Value> {
     }
 
     if let Some(pp) = project_path {
-        let project_commands_dir = paths::get_project_commands_dir(Some(pp));
+        let project_commands_dir = paths::get_project_commands_dir(Some(pp), cwd_fallback);
         if project_commands_dir.exists() {
             commands.extend(scan_commands_dir(&project_commands_dir, "project"));
         }
@@ -539,12 +539,12 @@ fn get_plugin_command(plugin_name: &str, path: &str) -> Option<Value> {
 }
 
 /// Port of `CommandService.get_command`.
-fn get_command_impl(scope: &str, path: &str, project_path: Option<&str>) -> Option<Value> {
+fn get_command_impl(scope: &str, path: &str, project_path: Option<&str>, cwd_fallback: &Path) -> Option<Value> {
     let base_dir: PathBuf;
     if scope == "user" {
         base_dir = paths::get_claude_user_commands_dir();
     } else if scope == "project" {
-        base_dir = paths::get_project_commands_dir(project_path);
+        base_dir = paths::get_project_commands_dir(project_path, cwd_fallback);
     } else if let Some(plugin_name) = scope.strip_prefix("plugin:") {
         return get_plugin_command(plugin_name, path);
     } else {
@@ -571,13 +571,17 @@ fn get_command_impl(scope: &str, path: &str, project_path: Option<&str>) -> Opti
 // ---- handlers --------------------------------------------------------------
 
 /// GET /api/v1/commands
-async fn list_commands(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<Value>> {
-    let commands = list_commands_impl(q.project_path.as_deref());
+async fn list_commands(
+    State(state): State<ApiState>,
+    Query(q): Query<ProjectPathQuery>,
+) -> AppResult<Json<Value>> {
+    let commands = list_commands_impl(q.project_path.as_deref(), &state.cwd_fallback);
     Ok(Json(json!({ "commands": commands })))
 }
 
 /// GET /api/v1/commands/{scope}/{path}
 async fn get_command(
+    State(state): State<ApiState>,
     AxumPath((scope, path)): AxumPath<(String, String)>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<Json<Value>> {
@@ -587,7 +591,7 @@ async fn get_command(
             scope
         )));
     }
-    match get_command_impl(&scope, &path, q.project_path.as_deref()) {
+    match get_command_impl(&scope, &path, q.project_path.as_deref(), &state.cwd_fallback) {
         Some(cmd) => Ok(Json(cmd)),
         None => Err(AppError::not_found(format!(
             "Command not found: {}/{}",
@@ -598,6 +602,7 @@ async fn get_command(
 
 /// POST /api/v1/commands  (201)
 async fn create_command(
+    State(state): State<ApiState>,
     Query(q): Query<ProjectPathQuery>,
     Json(command): Json<SlashCommandCreate>,
 ) -> AppResult<impl IntoResponse> {
@@ -611,7 +616,7 @@ async fn create_command(
     let base_dir = if command.scope == "user" {
         paths::get_claude_user_commands_dir()
     } else {
-        paths::get_project_commands_dir(q.project_path.as_deref())
+        paths::get_project_commands_dir(q.project_path.as_deref(), &state.cwd_fallback)
     };
 
     let file_path = name_to_path(&command.name, &base_dir);
@@ -680,6 +685,7 @@ async fn create_command(
 
 /// PUT /api/v1/commands/{scope}/{path}
 async fn update_command(
+    State(state): State<ApiState>,
     AxumPath((scope, path)): AxumPath<(String, String)>,
     Query(q): Query<ProjectPathQuery>,
     Json(command): Json<SlashCommandUpdate>,
@@ -694,7 +700,7 @@ async fn update_command(
     let base_dir = if scope == "user" {
         paths::get_claude_user_commands_dir()
     } else {
-        paths::get_project_commands_dir(q.project_path.as_deref())
+        paths::get_project_commands_dir(q.project_path.as_deref(), &state.cwd_fallback)
     };
 
     let file_path = base_dir.join(&path);
@@ -749,6 +755,7 @@ async fn update_command(
 
 /// DELETE /api/v1/commands/{scope}/{path}  (204)
 async fn delete_command(
+    State(state): State<ApiState>,
     AxumPath((scope, path)): AxumPath<(String, String)>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<impl IntoResponse> {
@@ -762,7 +769,7 @@ async fn delete_command(
     let base_dir = if scope == "user" {
         paths::get_claude_user_commands_dir()
     } else {
-        paths::get_project_commands_dir(q.project_path.as_deref())
+        paths::get_project_commands_dir(q.project_path.as_deref(), &state.cwd_fallback)
     };
 
     let file_path = base_dir.join(&path);

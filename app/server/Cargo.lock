@@ -2045,8 +2045,13 @@ name = "server-bin"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
+ "dirs",
+ "dotenvy",
  "server-core",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

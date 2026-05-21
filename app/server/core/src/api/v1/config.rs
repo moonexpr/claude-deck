@@ -157,10 +157,10 @@ fn settings_file_for_scope(scope: &str, project_path: Option<&str>) -> Result<Pa
         "user" => Ok(paths::get_claude_user_settings_file()),
         "user_local" => Ok(paths::get_claude_user_settings_local_file()),
         "project" => project_path
-            .map(|p| paths::get_project_settings_file(Some(p)))
+            .map(|p| paths::get_project_settings_file(Some(p), std::path::Path::new("")))
             .ok_or_else(|| AppError::bad_request("project_path is required for project scope")),
         "local" => project_path
-            .map(|p| paths::get_project_settings_local_file(Some(p)))
+            .map(|p| paths::get_project_settings_local_file(Some(p), std::path::Path::new("")))
             .ok_or_else(|| AppError::bad_request("project_path is required for local scope")),
         other => Err(AppError::bad_request(format!(
             "Invalid scope: {}. Must be user, user_local, project, or local",
@@ -500,8 +500,8 @@ async fn get_settings_by_scope(
         "managed" => Some(paths::get_managed_settings_file()),
         "user" => Some(paths::get_claude_user_settings_file()),
         "user_local" => Some(paths::get_claude_user_settings_local_file()),
-        "project" => pp.map(|p| paths::get_project_settings_file(Some(p))),
-        "local" => pp.map(|p| paths::get_project_settings_local_file(Some(p))),
+        "project" => pp.map(|p| paths::get_project_settings_file(Some(p), std::path::Path::new(""))),
+        "local" => pp.map(|p| paths::get_project_settings_local_file(Some(p), std::path::Path::new(""))),
         _ => None,
     };
     let settings = match file_path {
@@ -525,11 +525,11 @@ fn all_scoped(pp: Option<&str>) -> Map<String, Value> {
     m.insert("user".into(), read_scope(&paths::get_claude_user_settings_file()));
     m.insert(
         "project".into(),
-        pp.map(|p| read_scope(&paths::get_project_settings_file(Some(p)))).unwrap_or_else(|| json!({})),
+        pp.map(|p| read_scope(&paths::get_project_settings_file(Some(p), std::path::Path::new("")))).unwrap_or_else(|| json!({})),
     );
     m.insert(
         "local".into(),
-        pp.map(|p| read_scope(&paths::get_project_settings_local_file(Some(p)))).unwrap_or_else(|| json!({})),
+        pp.map(|p| read_scope(&paths::get_project_settings_local_file(Some(p), std::path::Path::new("")))).unwrap_or_else(|| json!({})),
     );
     m
 }
@@ -597,8 +597,8 @@ async fn get_resolved_config(Query(q): Query<ProjectPathQuery>) -> AppResult<Jso
 
     let managed = paths::get_managed_settings_file();
     let user = paths::get_claude_user_settings_file();
-    let proj_p = pp.map(|p| paths::get_project_settings_file(Some(p)));
-    let local_p = pp.map(|p| paths::get_project_settings_local_file(Some(p)));
+    let proj_p = pp.map(|p| paths::get_project_settings_file(Some(p), std::path::Path::new("")));
+    let local_p = pp.map(|p| paths::get_project_settings_local_file(Some(p), std::path::Path::new("")));
 
     Ok(Json(json!({
         "resolved": resolved,

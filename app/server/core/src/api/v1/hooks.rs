@@ -170,7 +170,7 @@ fn settings_file_for_scope(scope: &str, project_path: Option<&str>) -> PathBuf {
     if scope == "user" {
         paths::get_claude_user_settings_file()
     } else {
-        paths::get_project_settings_file(project_path)
+        paths::get_project_settings_file(project_path, std::path::Path::new(""))
     }
 }
 
@@ -275,7 +275,7 @@ fn collect_hooks(project_path: Option<&str>) -> Vec<Value> {
     }
 
     if let Some(pp) = project_path {
-        let project_settings_file = paths::get_project_settings_file(Some(pp));
+        let project_settings_file = paths::get_project_settings_file(Some(pp), std::path::Path::new(""));
         if project_settings_file.exists() {
             if let Some(data) = read_settings(&project_settings_file) {
                 let section = data.get("hooks").cloned().unwrap_or_else(|| json!({}));

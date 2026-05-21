@@ -12,7 +12,7 @@
 // `CLIExecutor`.
 
 use axum::{
-    extract::{Json, Path as AxumPath, Query},
+    extract::{Json, Path as AxumPath, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{delete, get, post, put},
@@ -807,7 +807,7 @@ fn scan_plugins_directory(plugins_dir: &Path, scope: &str) -> Vec<Value> {
 }
 
 /// `list_installed_plugins`.
-fn list_installed_plugins(project_path: Option<&str>) -> Vec<Value> {
+fn list_installed_plugins(project_path: Option<&str>, cwd_fallback: &std::path::Path) -> Vec<Value> {
     let mut plugins: Vec<Value> = get_enabled_plugins_from_settings();
 
     let name_of = |p: &Value| p.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
@@ -825,7 +825,7 @@ fn list_installed_plugins(project_path: Option<&str>) -> Vec<Value> {
     }
 
     if let Some(pp) = project_path {
-        let project_plugins_dir = paths::get_project_plugins_dir(Some(pp));
+        let project_plugins_dir = paths::get_project_plugins_dir(Some(pp), cwd_fallback);
         if project_plugins_dir.exists() {
             let local_plugins = scan_plugins_directory(&project_plugins_dir, "project");
             for mut plugin in local_plugins {
@@ -966,7 +966,10 @@ struct CliResult {
 }
 
 /// Port of `CLIExecutor._find_claude_binary` (= `shutil.which("claude")`).
-fn find_claude_binary() -> Option<PathBuf> {
+fn find_claude_binary(enable_external_tools: bool) -> Option<PathBuf> {
+    if !enable_external_tools {
+        return None;
+    }
     let path_var = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path_var) {
         let candidate = dir.join("claude");
@@ -980,8 +983,8 @@ fn find_claude_binary() -> Option<PathBuf> {
 /// Port of `CLIExecutor.execute` for the `plugin` subcommand. `extra_env` is
 /// applied on top of the inherited environment (used by install for the
 /// HTTPS-instead-of-SSH git config).
-async fn cli_execute(args: &[&str], timeout_secs: u64, extra_env: &[(&str, &str)]) -> CliResult {
-    let Some(binary) = find_claude_binary() else {
+async fn cli_execute(args: &[&str], timeout_secs: u64, extra_env: &[(&str, &str)], enable_external_tools: bool) -> CliResult {
+    let Some(binary) = find_claude_binary(enable_external_tools) else {
         return CliResult {
             stdout: String::new(),
             stderr: "Failed to execute command: Claude CLI binary not found in PATH. Please ensure Claude Code is installed and accessible.".to_string(),
@@ -1142,8 +1145,8 @@ impl OrderedMap {
     }
 }
 
-fn check_for_updates() -> Value {
-    let installed = list_installed_plugins(None);
+fn check_for_updates(cwd_fallback: &std::path::Path) -> Value {
+    let installed = list_installed_plugins(None, cwd_fallback);
     let available = get_all_available_plugins_list();
 
     let mut available_by_name: std::collections::HashMap<String, Value> =
@@ -1191,8 +1194,11 @@ fn check_for_updates() -> Value {
 // ---- handlers ---------------------------------------------------------------
 
 /// GET /api/v1/plugins
-async fn list_plugins(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<Value>> {
-    let plugins = list_installed_plugins(q.project_path.as_deref());
+async fn list_plugins(
+    State(state): State<ApiState>,
+    Query(q): Query<ProjectPathQuery>,
+) -> AppResult<Json<Value>> {
+    let plugins = list_installed_plugins(q.project_path.as_deref(), &state.cwd_fallback);
     Ok(Json(json!({ "plugins": plugins })))
 }
 
@@ -1202,14 +1208,17 @@ async fn list_marketplaces() -> AppResult<Json<Value>> {
 }
 
 /// POST /api/v1/plugins/marketplaces  (201)
-async fn add_marketplace(Json(req): Json<MarketplaceCreate>) -> AppResult<Response> {
+async fn add_marketplace(
+    State(state): State<ApiState>,
+    Json(req): Json<MarketplaceCreate>,
+) -> AppResult<Response> {
     let _ = (&req.name, &req.url);
     let input = match req.input.as_deref() {
         Some(s) if !s.is_empty() => s,
         _ => return Err(AppError::bad_request("Marketplace input is required")),
     };
 
-    let result = cli_execute(&["marketplace", "add", input], 120, &[]).await;
+    let result = cli_execute(&["marketplace", "add", input], 120, &[], state.enable_external_tools).await;
     let success = result.exit_code == 0;
     let message = if success {
         result.stdout.clone()
@@ -1231,8 +1240,11 @@ async fn add_marketplace(Json(req): Json<MarketplaceCreate>) -> AppResult<Respon
 }
 
 /// DELETE /api/v1/plugins/marketplaces/{name}
-async fn remove_marketplace(AxumPath(name): AxumPath<String>) -> AppResult<Json<Value>> {
-    let result = cli_execute(&["marketplace", "remove", &name], 60, &[]).await;
+async fn remove_marketplace(
+    State(state): State<ApiState>,
+    AxumPath(name): AxumPath<String>,
+) -> AppResult<Json<Value>> {
+    let result = cli_execute(&["marketplace", "remove", &name], 60, &[], state.enable_external_tools).await;
     let success = result.exit_code == 0;
     let message = if success {
         result.stdout.clone()
@@ -1407,8 +1419,11 @@ async fn get_marketplace_plugin_details(
 }
 
 /// POST /api/v1/plugins/marketplace/{name}/update  (200)
-async fn update_marketplace(AxumPath(name): AxumPath<String>) -> AppResult<Json<Value>> {
-    let result = cli_execute(&["marketplace", "update", &name], 120, &[]).await;
+async fn update_marketplace(
+    State(state): State<ApiState>,
+    AxumPath(name): AxumPath<String>,
+) -> AppResult<Json<Value>> {
+    let result = cli_execute(&["marketplace", "update", &name], 120, &[], state.enable_external_tools).await;
     let success = result.exit_code == 0;
     let message = if success {
         result.stdout.clone()
@@ -1467,8 +1482,8 @@ async fn set_marketplace_auto_update(
 }
 
 /// GET /api/v1/plugins/updates
-async fn check_plugin_updates() -> AppResult<Json<Value>> {
-    Ok(Json(check_for_updates()))
+async fn check_plugin_updates(State(state): State<ApiState>) -> AppResult<Json<Value>> {
+    Ok(Json(check_for_updates(&state.cwd_fallback)))
 }
 
 /// GET /api/v1/plugins/available
@@ -1550,8 +1565,8 @@ fn update_plugin_inner(name: &str, result: CliResult) -> Value {
 }
 
 /// POST /api/v1/plugins/update-all
-async fn update_all_plugins() -> AppResult<Json<Value>> {
-    let updates = check_for_updates();
+async fn update_all_plugins(State(state): State<ApiState>) -> AppResult<Json<Value>> {
+    let updates = check_for_updates(&state.cwd_fallback);
     let mut results: Vec<Value> = Vec::new();
     let mut updated_count = 0i64;
     let mut failed_count = 0i64;
@@ -1559,7 +1574,7 @@ async fn update_all_plugins() -> AppResult<Json<Value>> {
     if let Some(plugins) = updates.get("plugins").and_then(|p| p.as_array()) {
         for pinfo in plugins {
             let name = pinfo.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            let cli = cli_execute(&["update", name], 120, &[]).await;
+            let cli = cli_execute(&["update", name], 120, &[], state.enable_external_tools).await;
             let result = update_plugin_inner(name, cli);
             if result
                 .get("success")
@@ -1584,19 +1599,25 @@ async fn update_all_plugins() -> AppResult<Json<Value>> {
 }
 
 /// POST /api/v1/plugins/{name}/update
-async fn update_plugin(AxumPath(name): AxumPath<String>) -> AppResult<Json<Value>> {
-    let cli = cli_execute(&["update", &name], 120, &[]).await;
+async fn update_plugin(
+    State(state): State<ApiState>,
+    AxumPath(name): AxumPath<String>,
+) -> AppResult<Json<Value>> {
+    let cli = cli_execute(&["update", &name], 120, &[], state.enable_external_tools).await;
     Ok(Json(update_plugin_inner(&name, cli)))
 }
 
 /// POST /api/v1/plugins/install
-async fn install_plugin(Json(req): Json<PluginInstallRequest>) -> AppResult<Json<Value>> {
+async fn install_plugin(
+    State(state): State<ApiState>,
+    Json(req): Json<PluginInstallRequest>,
+) -> AppResult<Json<Value>> {
     let extra_env = [
         ("GIT_CONFIG_COUNT", "1"),
         ("GIT_CONFIG_KEY_0", "url.https://github.com/.insteadOf"),
         ("GIT_CONFIG_VALUE_0", "git@github.com:"),
     ];
-    let result = cli_execute(&["install", &req.name], 120, &extra_env).await;
+    let result = cli_execute(&["install", &req.name], 120, &extra_env, state.enable_external_tools).await;
     let success = result.exit_code == 0;
 
     let (message, enhanced_stderr) = if success {
@@ -1702,6 +1723,7 @@ async fn toggle_plugin(
 
 /// GET /api/v1/plugins/{name}
 async fn get_plugin(
+    State(state): State<ApiState>,
     AxumPath(name): AxumPath<String>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<Json<Value>> {
@@ -1713,7 +1735,7 @@ async fn get_plugin(
 
     if !plugin_path.exists() {
         if let Some(pp) = q.project_path.as_deref() {
-            let project_plugins_dir = paths::get_project_plugins_dir(Some(pp));
+            let project_plugins_dir = paths::get_project_plugins_dir(Some(pp), &state.cwd_fallback);
             plugin_path = project_plugins_dir
                 .join(&name)
                 .join(".claude-plugin")

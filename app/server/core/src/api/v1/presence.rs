@@ -829,9 +829,14 @@ async fn clear_all_sessions(
 }
 
 /// GET /api/v1/presence/config-snippet
-async fn get_config_snippet(headers: HeaderMap) -> AppResult<Json<Value>> {
-    let override_url = std::env::var("PRESENCE_PUBLIC_URL")
-        .unwrap_or_default()
+async fn get_config_snippet(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let override_url = state
+        .presence_public_url
+        .as_deref()
+        .unwrap_or("")
         .trim()
         .trim_end_matches('/')
         .to_string();

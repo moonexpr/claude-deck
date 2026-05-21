@@ -1,6 +1,6 @@
 // PORTED: cli_executor.py + api/v1/cli.py
 
-use axum::{extract::Json, routing::post, Router};
+use axum::{extract::{Json, State}, routing::post, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::path::PathBuf;
@@ -31,7 +31,10 @@ fn validate_command(command: &str) -> bool {
 }
 
 /// Port of `shutil.which("claude")` — scan PATH for an executable `claude`.
-fn find_claude_binary() -> Option<PathBuf> {
+fn find_claude_binary(enable_external_tools: bool) -> Option<PathBuf> {
+    if !enable_external_tools {
+        return None;
+    }
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {
         if dir.as_os_str().is_empty() {
@@ -60,7 +63,10 @@ fn is_executable(p: &std::path::Path) -> bool {
 }
 
 /// POST /api/v1/cli/execute
-async fn execute_cli_command(Json(req): Json<CLIExecuteRequest>) -> AppResult<Json<Value>> {
+async fn execute_cli_command(
+    State(state): State<ApiState>,
+    Json(req): Json<CLIExecuteRequest>,
+) -> AppResult<Json<Value>> {
     // Validate command against whitelist (HTTPException 400).
     if !validate_command(&req.command) {
         return Err(AppError::bad_request(format!(
@@ -71,7 +77,7 @@ async fn execute_cli_command(Json(req): Json<CLIExecuteRequest>) -> AppResult<Js
     }
 
     // Check if claude binary is available (HTTPException 500).
-    let claude_binary = match find_claude_binary() {
+    let claude_binary = match find_claude_binary(state.enable_external_tools) {
         Some(b) => b,
         None => {
             return Err(AppError::internal(

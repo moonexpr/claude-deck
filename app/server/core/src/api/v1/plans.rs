@@ -1,7 +1,7 @@
 // PORTED: plan_service.py + api/v1/plans.py
 
 use axum::{
-    extract::{Json, Query},
+    extract::{Json, Query, State},
     routing::get,
     Router,
 };
@@ -95,7 +95,7 @@ fn merged_settings(project_path: Option<&str>) -> Map<String, Value> {
 }
 
 /// Port of `PlanService.resolve_plans_dir`.
-fn resolve_plans_dir(project_path: Option<&str>) -> PathBuf {
+fn resolve_plans_dir(project_path: Option<&str>, cwd_fallback: &Path) -> PathBuf {
     let settings = merged_settings(project_path);
     let plans_dir_setting = settings
         .get("plansDirectory")
@@ -118,10 +118,10 @@ fn resolve_plans_dir(project_path: Option<&str>) -> PathBuf {
         if expanded.is_absolute() {
             return expanded;
         }
-        // Relative to project root (or CWD).
+        // Relative to project root (or cwd_fallback when no project_path).
         let base = match project_path {
             Some(p) => PathBuf::from(p),
-            None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            None => cwd_fallback.to_path_buf(),
         };
         let joined = base.join(&expanded);
         return std::fs::canonicalize(&joined).unwrap_or(joined);
@@ -515,27 +515,36 @@ fn scan_jsonl_for_slug(filepath: &Path, slug: &str, project_folder: &str) -> Opt
 // ---- handlers ---------------------------------------------------------------
 
 /// GET /api/v1/plans
-async fn list_plans(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<Value>> {
-    let plans_dir = resolve_plans_dir(q.project_path.as_deref());
+async fn list_plans(
+    State(state): State<ApiState>,
+    Query(q): Query<ProjectPathQuery>,
+) -> AppResult<Json<Value>> {
+    let plans_dir = resolve_plans_dir(q.project_path.as_deref(), &state.cwd_fallback);
     let plans = list_plans_impl(&plans_dir);
     let total = plans.len();
     Ok(Json(json!({ "plans": plans, "total": total })))
 }
 
 /// GET /api/v1/plans/stats
-async fn get_plan_stats(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<Value>> {
-    let plans_dir = resolve_plans_dir(q.project_path.as_deref());
+async fn get_plan_stats(
+    State(state): State<ApiState>,
+    Query(q): Query<ProjectPathQuery>,
+) -> AppResult<Json<Value>> {
+    let plans_dir = resolve_plans_dir(q.project_path.as_deref(), &state.cwd_fallback);
     Ok(Json(get_plan_stats_impl(&plans_dir)))
 }
 
 /// GET /api/v1/plans/search
-async fn search_plans(Query(q): Query<SearchQuery>) -> AppResult<Json<Value>> {
+async fn search_plans(
+    State(state): State<ApiState>,
+    Query(q): Query<SearchQuery>,
+) -> AppResult<Json<Value>> {
     if q.q.is_empty() {
         return Err(AppError::bad_request(
             "ensure this value has at least 1 characters",
         ));
     }
-    let plans_dir = resolve_plans_dir(q.project_path.as_deref());
+    let plans_dir = resolve_plans_dir(q.project_path.as_deref(), &state.cwd_fallback);
     let results = search_plans_impl(&plans_dir, &q.q);
     let total = results.len();
     Ok(Json(json!({ "results": results, "query": q.q, "total": total })))
@@ -543,10 +552,11 @@ async fn search_plans(Query(q): Query<SearchQuery>) -> AppResult<Json<Value>> {
 
 /// GET /api/v1/plans/{filename}
 async fn get_plan_detail(
+    State(state): State<ApiState>,
     axum::extract::Path(filename): axum::extract::Path<String>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<Json<Value>> {
-    let plans_dir = resolve_plans_dir(q.project_path.as_deref());
+    let plans_dir = resolve_plans_dir(q.project_path.as_deref(), &state.cwd_fallback);
     let plan_data = get_plan_impl(&plans_dir, &filename);
 
     let Some(mut plan_data) = plan_data else {
