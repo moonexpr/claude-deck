@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claude Deck</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f0f13;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .card {
+      background: #1a1a24;
+      border: 1px solid #2d2d3d;
+      border-radius: 12px;
+      padding: 2.5rem;
+      max-width: 560px;
+      width: 100%;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.4);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      color: #f0f4ff;
+    }
+
+    .subtitle {
+      font-size: 0.875rem;
+      color: #6b7280;
+      margin-bottom: 2rem;
+    }
+
+    .row {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .field {
+      background: #111118;
+      border: 1px solid #2d2d3d;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+    }
+
+    .field-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #6b7280;
+      margin-bottom: 0.5rem;
+    }
+
+    .field-value {
+      font-family: "SF Mono", "Fira Code", "Menlo", monospace;
+      font-size: 0.875rem;
+      color: #a5b4fc;
+      word-break: break-all;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.3rem 0.75rem;
+      border-radius: 99px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      margin-top: 1.5rem;
+    }
+
+    .badge.ok  { background: #14532d; color: #4ade80; border: 1px solid #166534; }
+    .badge.err { background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; }
+    .badge.pending { background: #1e1b4b; color: #a5b4fc; border: 1px solid #312e81; }
+
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    pre {
+      background: #0a0a0f;
+      border: 1px solid #2d2d3d;
+      border-radius: 8px;
+      padding: 1rem;
+      font-size: 0.8125rem;
+      font-family: "SF Mono", "Fira Code", "Menlo", monospace;
+      color: #93c5fd;
+      overflow-x: auto;
+      margin-top: 1rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Claude Deck</h1>
+    <p class="subtitle">Tauri 2 bootstrap — A3</p>
+
+    <div class="row">
+      <div class="field">
+        <div class="field-label">Embedded server URL</div>
+        <div class="field-value" id="base-url">loading&hellip;</div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">GET /health</div>
+        <pre id="health-out">waiting&hellip;</pre>
+      </div>
+
+      <div class="field">
+        <div class="field-label">GET /api/v1/status</div>
+        <div class="field-value" id="status-out">waiting&hellip;</div>
+      </div>
+    </div>
+
+    <div id="badge" class="badge pending">
+      <span class="spinner"></span>
+      <span id="badge-text">Connecting to embedded server&hellip;</span>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    function setBadge(state, text) {
+      const badge = $('badge');
+      badge.className = 'badge ' + state;
+      const icon = state === 'pending'
+        ? '<span class="spinner"></span>'
+        : '<span class="dot"></span>';
+      badge.innerHTML = icon + '<span>' + text + '</span>';
+    }
+
+    async function poll(baseUrl, maxMs = 8000, intervalMs = 400) {
+      const deadline = Date.now() + maxMs;
+      while (Date.now() < deadline) {
+        try {
+          const [hRes, sRes] = await Promise.all([
+            fetch(baseUrl + '/health'),
+            fetch(baseUrl + '/api/v1/status'),
+          ]);
+          if (hRes.ok && sRes.ok) {
+            const hJson = await hRes.json();
+            const sText = await sRes.text();
+            return { health: hJson, status: sText };
+          }
+        } catch (_) {
+          // server still starting — retry
+        }
+        await new Promise(r => setTimeout(r, intervalMs));
+      }
+      throw new Error('timed out waiting for embedded server');
+    }
+
+    async function main() {
+      // Tauri 2 with withGlobalTauri:true exposes window.__TAURI__.core.invoke
+      const tauriCore = window.__TAURI__ && window.__TAURI__.core;
+      if (!tauriCore) {
+        $('base-url').textContent = '__TAURI__.core not found — withGlobalTauri may be off';
+        setBadge('err', 'Tauri IPC unavailable');
+        return;
+      }
+      const invoke = tauriCore.invoke;
+
+      let baseUrl;
+      try {
+        baseUrl = await invoke('server_base_url');
+        $('base-url').textContent = baseUrl;
+      } catch (err) {
+        $('base-url').textContent = 'invoke failed: ' + err;
+        setBadge('err', 'invoke error — ' + err);
+        return;
+      }
+
+      try {
+        const { health, status } = await poll(baseUrl);
+        $('health-out').textContent = JSON.stringify(health, null, 2);
+        $('status-out').textContent = status;
+        setBadge('ok', 'server-core embedded ✓');
+      } catch (err) {
+        $('health-out').textContent = String(err);
+        $('status-out').textContent = '—';
+        setBadge('err', 'server error — ' + err);
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>
