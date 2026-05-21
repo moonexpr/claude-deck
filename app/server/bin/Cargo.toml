@@ -1,0 +1,13 @@
+[package]
+name = "server-bin"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "server-bin"
+path = "src/main.rs"
+
+[dependencies]
+server-core = { path = "../core" }
+tokio = { version = "1.52.3", features = ["full"] }
+anyhow = "1.0.102"
