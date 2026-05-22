@@ -27,12 +27,14 @@ Status legend: ⬜ todo · 🔵 in progress · ✅ done · ⏸ blocked
 
 - ✅ **B1** Foundation (solo, `david`) — theme fidelity vs legacy · `MainLayout` + registry-driven sidebar + dark-mode toggle · the 17 remaining shadcn primitives · `MarkdownRenderer` + `MarkdownPreviewToggle` (CM6) · `lib/api.ts` + `constants.ts` · **the `import.meta.glob` feature-route registry** (`route` | `routes[]`, discriminated `FeatureRoute`) · sonner `<Toaster>` · `ProjectSwitcher` in `components/layout/`. Theme token diff clean (no Tailwind 3→4 drift). — `459cad7`
 - ✅ **B1+** Shared-base completion — 18 type files → `app/web/src/types/` (`@/types/` kept shared: 5 type files are cross-feature) · `RefreshButton` (all 19 pages) + `JsonViewer` shared components. — `d3d9d9c`
-- 🔵 **B2** Stable pages — parallel after B1: `dashboard, config, presence, projects, plans, context, statusline`
-- 🔵 **B3** Markdown-editable pages, CM6 — parallel after B1: `commands, agents, skills, memory, output-styles, hooks`
-- 🔵 **B4** Complex pages — parallel after B1: `mcp, plugins, permissions, sessions, backup, usage`
-- 🔵 **B5** cc-bridge v2 — portable-pty host + new wire contract + xterm client — parallel track (`timothy` + `john`)
+- ✅ **B2** Stable pages — `dashboard, config, presence, projects, plans, context, statusline`
+- ✅ **B3** Markdown-editable pages, CM6 — `commands, agents, skills, memory, output-styles, hooks`
+- ✅ **B4** Complex pages — `mcp, plugins, permissions, sessions, backup, usage`
+- 🔵 **B5** cc-bridge v2 — portable-pty server + xterm client committed (`3f43e59`); **pending:** cross-feature-import fix, `john` security review, functional PTY test.
 
-**Wave dispatched** (10 agents, isolated worktrees, background): B2a `[dashboard,config,statusline]` · B2b `[presence,projects,plans]` · B2c `[context]` · B3a `[commands,agents]` · B3b `[skills,output-styles]` · B3c `[memory,hooks]` · B4a `[mcp]` · B4b `[plugins,permissions,backup]` · B4c `[sessions,usage]` · B5 `[cc-bridge]`. ARCHITECT reviews each, collects disjoint feature dirs into the main tree, commits per page; then the consolidated build + Playwright sweep.
+**Wave outcome:** the parallel worktree wave collapsed (worktree isolation flaky + an account session limit cut 7/10 agents) — recovered in-place via a main-tree recovery wave. Commits: `5a58e81` (wave pile preserved) · `5d567a0` (worktree-branch collect) · `a55b170` (19 page ports) · `3f43e59` (cc-bridge) · `3e60e2c` (e2e green). **Playwright sweep 49/49 green.**
+
+**Phase B gate — 4 / 7 validators met:** ✅(1) all 20 pages render w/o console errors vs server-bin · ✅(2) Playwright nav smoke green · ⬜(3) cc-bridge functional + same-origin · ⬜(4) mobile-responsive (iPhone 375) · ⬜(5) LAN access · ✅(6) no DB schema change · ✅(7) legacy trees build from `main`.
 
 **Phase B gate:** all 7 feature-parity validators pass (see `.claude/HANDOFF.md` §5).
 
