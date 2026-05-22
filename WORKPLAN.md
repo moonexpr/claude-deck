@@ -25,7 +25,7 @@ Status legend: ⬜ todo · 🔵 in progress · ✅ done · ⏸ blocked
 
 **Execution model:** **B1 runs FIRST and SOLO** — it is the foundation and unlocks parallelism by establishing a glob-discovered feature-route registry (page agents then never touch shared files). After B1 is verified+committed, the page ports run as a **parallel wave** of `david` subagents — each owns one isolated `app/web/src/features/<name>/` dir — alongside B5 on its own track.
 
-- ⬜ **B1** Foundation (solo, `david`) — theme fidelity vs legacy · `MainLayout` + registry-driven sidebar + dark-mode toggle · the 17 remaining shadcn primitives · `MarkdownRenderer` + `MarkdownPreviewToggle` (CM6) · `lib/api.ts` + `constants.ts` · **the `import.meta.glob` feature-route registry**. Tailwind 3→4 visual-risk gate — halt on drift.
+- ✅ **B1** Foundation (solo, `david`) — theme fidelity vs legacy · `MainLayout` + registry-driven sidebar + dark-mode toggle · the 17 remaining shadcn primitives · `MarkdownRenderer` + `MarkdownPreviewToggle` (CM6) · `lib/api.ts` + `constants.ts` · **the `import.meta.glob` feature-route registry** (`route` | `routes[]`, discriminated `FeatureRoute`) · sonner `<Toaster>` · `ProjectSwitcher` in `components/layout/`. Theme token diff clean (no Tailwind 3→4 drift). — `459cad7`
 - ⬜ **B2** Stable pages — parallel after B1: `dashboard, config, presence, projects, plans, context, statusline`
 - ⬜ **B3** Markdown-editable pages, CM6 — parallel after B1: `commands, agents, skills, memory, output-styles, hooks`
 - ⬜ **B4** Complex pages — parallel after B1: `mcp, plugins, permissions, sessions, backup, usage`
