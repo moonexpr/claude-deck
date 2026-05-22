@@ -627,12 +627,15 @@ async fn session_terminal(
     Query(q): Query<TerminalQuery>,
 ) -> Response {
     // --- same-origin check (preserved from legacy) ---
+    // FIX 2: An absent Origin is rejected the same as a mismatched one.
+    // Every legitimate browser/Tauri client sends Origin; an absent header is
+    // characteristic of a non-browser (e.g. scripted) connection attempt.
     let origin = headers
         .get("origin")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_string();
-    if !origin.is_empty() && !is_same_origin(&origin, &headers) {
+    if origin.is_empty() || !is_same_origin(&origin, &headers) {
         return ws.on_upgrade(|mut s| async move {
             let _ = s
                 .send(Message::Close(Some(axum::extract::ws::CloseFrame {
@@ -759,13 +762,32 @@ async fn pty_relay(mut socket: WebSocket) {
         }
     }
 
-    // Collect exit code (non-blocking try; fall back to -1)
-    let exit_code = child
-        .try_wait()
-        .ok()
-        .and_then(|s| s)
-        .map(|s| if s.success() { 0i32 } else { 1i32 })
-        .unwrap_or(-1);
+    // FIX 1: Kill and reap the child on every exit path so that no orphaned
+    // shell process outlives its WebSocket connection.
+    //
+    // Strategy:
+    //   1. Try a non-blocking check first — if the child already exited
+    //      naturally (channel EOF path), capture the exit code without killing.
+    //   2. If it is still running, send SIGKILL (portable_pty::Child::kill)
+    //      and then block-wait to reap the zombie.
+    //   3. On any error, fall back to exit code -1 but still attempt kill+wait
+    //      so the kernel can clean up the process table entry.
+    let exit_code = match child.try_wait() {
+        Ok(Some(status)) => {
+            // Child already exited naturally; just read the code.
+            if status.success() { 0i32 } else { 1i32 }
+        }
+        _ => {
+            // Child is still running (or try_wait failed) — force-kill it.
+            let _ = child.kill();
+            // Block until the kernel confirms the child is gone; capture code.
+            child
+                .wait()
+                .ok()
+                .map(|s| if s.success() { 0i32 } else { 1i32 })
+                .unwrap_or(-1)
+        }
+    };
 
     let exit_json = ExitFrame::new(exit_code).to_json();
     let _ = socket.send(Message::Text(exit_json.into())).await;

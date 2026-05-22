@@ -1,4 +1,4 @@
-import { apiClient } from '@/lib/api'
+import { apiClient, buildEndpoint } from '@/lib/api'
 import type {
   CCSessionsResponse,
   CCPreviewResponse,
@@ -7,6 +7,7 @@ import type {
   SpawnSessionResponse,
   KillSessionResponse,
 } from './types'
+import type { SessionListResponse } from '@/types/sessions'
 
 const BASE = 'cc-bridge'
 
@@ -48,4 +49,21 @@ export async function killSession(
     `${BASE}/sessions/${encodeURIComponent(target)}${params}`,
     { method: 'DELETE' },
   )
+}
+
+/**
+ * Fetch recent Claude Code session transcripts for the "Resume" mode picker
+ * in NewSessionDialog.  This calls the /api/v1/sessions transcript endpoint
+ * directly — no hook needed because the caller drives it from a useEffect.
+ *
+ * cc-bridge "sessions" (live PTY terminals) and transcript sessions are
+ * different domains; this function lives here so cc-bridge imports nothing
+ * from @/features/sessions/*.
+ */
+export async function listRecentSessions(params?: {
+  limit?: number
+  sort_by?: string
+  sort_order?: string
+}): Promise<SessionListResponse> {
+  return apiClient<SessionListResponse>(buildEndpoint('sessions', params))
 }

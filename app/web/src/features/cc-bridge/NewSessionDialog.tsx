@@ -13,8 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { MODAL_SIZES } from '@/lib/constants'
 import { cn } from '@/lib/utils'
-import { spawnSession } from './api'
-import { useSessionsApi } from '@/features/sessions/useSessionsApi'
+import { spawnSession, listRecentSessions } from './api'
 import { useProjectStore } from '@/stores/useProjectStore'
 import type { SpawnSessionRequest } from './types'
 import type { SessionSummary } from '@/types/sessions'
@@ -58,7 +57,6 @@ export function NewSessionDialog({
   const [selectedSession, setSelectedSession] = useState<SessionSummary | null>(null)
   const [loadingSessions, setLoadingSessions] = useState(false)
 
-  const { listSessions } = useSessionsApi()
   const projects = useProjectStore((s) => s.projects)
 
   // Fetch sessions when switching to resume mode
@@ -66,7 +64,7 @@ export function NewSessionDialog({
     if (mode !== 'resume') return
     let cancelled = false
     setLoadingSessions(true)
-    listSessions({ limit: 20, sort_by: 'date', sort_order: 'desc' })
+    listRecentSessions({ limit: 20, sort_by: 'date', sort_order: 'desc' })
       .then((data) => {
         if (!cancelled) setRecentSessions(data.sessions)
       })
@@ -79,7 +77,7 @@ export function NewSessionDialog({
     return () => {
       cancelled = true
     }
-  }, [mode, listSessions])
+  }, [mode])
 
   // Reset state when dialog closes
   useEffect(() => {
