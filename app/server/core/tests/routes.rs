@@ -262,3 +262,79 @@ async fn all_route_families_mounted_and_respond() {
     // ---- Cleanup -----------------------------------------------------------
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+// ---------------------------------------------------------------------------
+// SPA fallback regression: client-side routes must return 200, not 404
+// ---------------------------------------------------------------------------
+
+/// Build a minimal fake dist tree:
+///   <tmp>/dist/index.html          — the SPA shell
+///   <tmp>/dist/assets/app.js       — a static asset
+///   <tmp>/dist/favicon-32.png      — a root-level static file
+fn make_fake_dist(tmp: &std::path::Path) -> std::path::PathBuf {
+    let dist = tmp.join("dist");
+    std::fs::create_dir_all(dist.join("assets")).unwrap();
+    std::fs::write(
+        dist.join("index.html"),
+        b"<!DOCTYPE html><html><body>SPA</body></html>",
+    )
+    .unwrap();
+    std::fs::write(dist.join("assets").join("app.js"), b"console.log('ok')").unwrap();
+    std::fs::write(dist.join("favicon-32.png"), b"\x89PNG").unwrap();
+    dist
+}
+
+#[tokio::test]
+async fn spa_fallback_returns_200_for_client_routes() {
+    let tmp = std::env::temp_dir().join(format!(
+        "claude_deck_spa_fallback_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .subsec_nanos()
+    ));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let dist = make_fake_dist(&tmp);
+
+    let db_url = format!("sqlite:{}?mode=rwc", tmp.join("test.db").display());
+    let config = server_core::ServerConfig {
+        db_url,
+        projects_dir: tmp.join("projects"),
+        frontend_dist_path: Some(dist.clone()),
+        presence_public_url: None,
+        anthropic_api_key: None,
+        enable_external_tools: false,
+        cwd_fallback: tmp.clone(),
+    };
+    let router = server_core::app(config).await.expect("server_core::app failed");
+
+    // GET / → 200 (index.html)
+    let code = get(&router, "/").await;
+    assert_eq!(code, 200, "GET / should be 200");
+
+    // GET /agents → 200 (client-side route, not a file — must serve index.html)
+    let code = get(&router, "/agents").await;
+    assert_eq!(code, 200, "GET /agents (SPA route) should be 200, not 404");
+
+    // GET /cc-bridge → 200
+    let code = get(&router, "/cc-bridge").await;
+    assert_eq!(code, 200, "GET /cc-bridge (SPA route) should be 200");
+
+    // GET /usage → 200
+    let code = get(&router, "/usage").await;
+    assert_eq!(code, 200, "GET /usage (SPA route) should be 200");
+
+    // GET /assets/app.js → 200 (real static file)
+    let code = get(&router, "/assets/app.js").await;
+    assert_eq!(code, 200, "GET /assets/app.js (real file) should be 200");
+
+    // GET /favicon-32.png → 200 (real static file at root)
+    let code = get(&router, "/favicon-32.png").await;
+    assert_eq!(code, 200, "GET /favicon-32.png (real file) should be 200");
+
+    // GET /api/v1/status → 200 JSON (API route must not be shadowed by fallback)
+    let code = get(&router, "/api/v1/status").await;
+    assert_eq!(code, 200, "GET /api/v1/status must still work as API route");
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}

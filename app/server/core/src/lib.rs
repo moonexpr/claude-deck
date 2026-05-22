@@ -11,9 +11,10 @@ use axum::{
     routing::get,
     Router,
     Json,
+    response::IntoResponse,
+    http::StatusCode,
 };
 use sqlx::sqlite::SqlitePoolOptions;
-use tower_http::services::ServeDir;
 use tower_http::cors::{CorsLayer, Any};
 use std::path::PathBuf;
 use serde::Serialize;
@@ -46,6 +47,34 @@ pub struct ServerConfig {
     /// path and no `project_path` query param was supplied. Captured once by
     /// `server-bin` from `std::env::current_dir()` so the library never reads it.
     pub cwd_fallback: PathBuf,
+}
+
+/// Map a file extension to a MIME type string.
+///
+/// Covers the set of extensions produced by a typical Vite/React build:
+/// JavaScript modules, CSS, images, fonts, and common data formats.
+/// Falls back to `application/octet-stream` for anything else.
+fn ext_to_mime(ext: &str) -> &'static str {
+    match ext {
+        "html" | "htm"  => "text/html; charset=utf-8",
+        "js" | "mjs"    => "application/javascript",
+        "css"           => "text/css",
+        "json"          => "application/json",
+        "svg"           => "image/svg+xml",
+        "png"           => "image/png",
+        "jpg" | "jpeg"  => "image/jpeg",
+        "gif"           => "image/gif",
+        "ico"           => "image/x-icon",
+        "webp"          => "image/webp",
+        "woff"          => "font/woff",
+        "woff2"         => "font/woff2",
+        "ttf"           => "font/ttf",
+        "otf"           => "font/otf",
+        "txt"           => "text/plain; charset=utf-8",
+        "xml"           => "application/xml",
+        "wasm"          => "application/wasm",
+        _               => "application/octet-stream",
+    }
 }
 
 /// Build the axum `Router` from the supplied config.
@@ -116,13 +145,75 @@ pub async fn app(config: ServerConfig) -> anyhow::Result<axum::Router> {
         .layer(cors);
 
     // Mount static frontend serving only when a dist path was supplied.
+    //
+    // Why not ServeDir::not_found_service(ServeFile)?
+    // ServeDir's not_found_service propagates the 404 status from the parent
+    // ServeDir even though the inner ServeFile successfully serves the bytes.
+    // The result is index.html body + HTTP 404, which breaks SPA deep-links,
+    // browser caching, and "add to home screen".
+    //
+    // Correct idiom: use a single axum fallback handler.  The handler first
+    // tries to serve a real file from the dist directory (covers
+    // /assets/*, /favicon-32.png, etc.).  When the file does not exist the
+    // handler falls back to index.html with an explicit 200.  API routes are
+    // mounted before the fallback and matched first by axum, so /api/v1/* is
+    // never touched by this handler.
     if let Some(frontend_dist) = config.frontend_dist_path {
         let index_path = frontend_dist.join("index.html");
-        router = router.fallback_service(
-            ServeDir::new(frontend_dist)
-                .append_index_html_on_directories(true)
-                .not_found_service(tower_http::services::ServeFile::new(index_path))
-        );
+        let dist_root = frontend_dist.clone();
+        let spa_fallback = move |req: axum::http::Request<axum::body::Body>| {
+            let dist = dist_root.clone();
+            let index = index_path.clone();
+            async move {
+                // Strip leading '/' and resolve against the dist root.
+                let path_str = req.uri().path().trim_start_matches('/');
+                let candidate = dist.join(path_str);
+
+                // Only serve a real file if the resolved path stays inside the
+                // dist root (no path-traversal) and is a plain file.
+                let is_safe_file = candidate
+                    .canonicalize()
+                    .ok()
+                    .and_then(|abs| {
+                        dist.canonicalize()
+                            .ok()
+                            .map(|base| abs.starts_with(base) && abs.is_file())
+                    })
+                    .unwrap_or(false);
+
+                if is_safe_file {
+                    match tokio::fs::read(&candidate).await {
+                        Ok(bytes) => {
+                            let mime = ext_to_mime(
+                                candidate
+                                    .extension()
+                                    .and_then(|e| e.to_str())
+                                    .unwrap_or(""),
+                            );
+                            (
+                                StatusCode::OK,
+                                [(axum::http::header::CONTENT_TYPE, mime)],
+                                bytes,
+                            )
+                                .into_response()
+                        }
+                        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                    }
+                } else {
+                    // SPA client-side route — serve index.html with 200.
+                    match tokio::fs::read(&index).await {
+                        Ok(bytes) => (
+                            StatusCode::OK,
+                            [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+                            bytes,
+                        )
+                            .into_response(),
+                        Err(_) => StatusCode::NOT_FOUND.into_response(),
+                    }
+                }
+            }
+        };
+        router = router.fallback(spa_fallback);
     }
 
     Ok(router)
