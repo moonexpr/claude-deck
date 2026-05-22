@@ -76,6 +76,18 @@ test("Dashboard at 375px: hamburger opens MobileSidebar nav", async ({ page }) =
   // At least one nav link must be visible inside the drawer
   const firstNavLink = mobileNav.locator("a").first();
   await expect(firstNavLink).toBeVisible();
+
+  // Regression guard: the drawer must be pinned to the left edge. The shadcn
+  // DialogContent base centers modals via translate(-50%,-50%); the left
+  // drawer must override that, or it renders shifted half its size off the
+  // top-left corner (x was -140 before the fix).
+  const drawerBox = await page.locator('[role="dialog"]').first().boundingBox();
+  expect(drawerBox, "drawer has no bounding box").not.toBeNull();
+  expect(
+    drawerBox!.x,
+    `MobileSidebar drawer not pinned to the left edge: x=${drawerBox!.x}`
+  ).toBeGreaterThanOrEqual(-1);
+  expect(drawerBox!.x).toBeLessThanOrEqual(1);
 });
 
 test("Dashboard at 375px: no horizontal overflow", async ({ page }) => {
