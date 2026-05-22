@@ -1,4 +1,5 @@
 pub mod api;
+pub mod cc_bridge;
 pub mod error;
 pub mod fileio;
 pub mod models;

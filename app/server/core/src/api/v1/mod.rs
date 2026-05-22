@@ -16,7 +16,6 @@ pub mod permissions;
 pub mod plans;
 pub mod plugins;
 pub mod statusline;
-pub mod cc_bridge;
 pub mod context;
 pub mod ai;
 
@@ -86,7 +85,7 @@ pub fn router(
         .nest("/plans", plans::router())
         .nest("/plugins", plugins::router())
         .nest("/statusline", statusline::router())
-        .nest("/cc-bridge", cc_bridge::router())
+        .nest("/cc-bridge", crate::cc_bridge::router())
         .nest("/context", context::router())
         .nest("/ai", ai::router())
         .with_state(state)
