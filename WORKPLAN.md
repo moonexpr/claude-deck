@@ -16,8 +16,8 @@ Status legend: ⬜ todo · 🔵 in progress · ✅ done · ⏸ blocked
 - ✅ **A4** `app/web` Vite/React/TS scaffold — Tailwind 4 `@theme`, shadcn/ui, MainLayout shell — `a0ec741`
 - ✅ **A5** Zustand stores `useProjectStore`, `useDashboardStore`; MainLayout consumes — `00ad63e`
 - ✅ **A6** `CodeEditor` component (CM6 markdown mode) + demo route — `4240603`
-- 🔵 **A7** `/api/v1/ai/chat` returns 501 + key-source diagnostics; AI SDK client wired, disabled — **IN PROGRESS** (`isaiah`)
-- ⬜ **A8** Smoke harness — Rust route tests + Playwright nav config + one passing test
+- ✅ **A7** `/api/v1/ai/chat` returns 501 + key-source diagnostics; AI SDK client wired, disabled — `fdc9ce5`
+- 🔵 **A8** Smoke harness — Rust route tests + Playwright nav config + one passing test — **IN PROGRESS** (`luke`)
 
 **Phase A gate:** all 6 scaffolded validators in the plan pass.
 
