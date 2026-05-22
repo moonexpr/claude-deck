@@ -28,4 +28,16 @@ export default defineConfig({
       },
     },
   },
+  // `vite preview` (used by the Playwright webServer) needs its own proxy —
+  // it does not inherit `server.proxy`. Without this the e2e sweep hits
+  // /api on :4173 and 404s instead of reaching server-bin on :8000.
+  preview: {
+    proxy: {
+      "/api": {
+        target: "http://localhost:8000",
+        changeOrigin: false,
+        ws: true,
+      },
+    },
+  },
 });

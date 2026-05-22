@@ -3,13 +3,13 @@ import { test, expect } from "@playwright/test";
 /**
  * Status Line page smoke — Phase B page port.
  *
- * Navigates to /statusline and asserts that:
- * 1. The page heading "Status Line" is visible.
- * 2. No console errors are emitted during load.
- * 3. The Current Status card with its enabled/disabled toggle is present.
- * 4. The Presets section heading is visible.
+ * Navigates to /statusline and asserts that the page heading "Status Line"
+ * is visible and no console errors are emitted during load.
  *
- * Actual preset content and powerline themes depend on a live backend.
+ * Note: CardTitle components render as <div>, not heading elements, so
+ * section headings like "Current Status", "Presets", and "Configuration"
+ * are not addressable via getByRole("heading"). The smoke floor is the
+ * PageHeader h1 plus zero console errors.
  */
 test("Status Line page renders without console errors", async ({ page }) => {
   const consoleErrors: string[] = [];
@@ -34,29 +34,23 @@ test("Status Line page renders without console errors", async ({ page }) => {
   ).toHaveLength(0);
 });
 
-test("Status Line page shows Current Status card", async ({ page }) => {
+test("Status Line page shows enabled/disabled toggle", async ({ page }) => {
   await page.goto("/statusline");
 
-  // Current Status heading
-  await expect(
-    page.getByRole("heading", { name: /current status/i })
-  ).toBeVisible();
+  // The Switch for enabling/disabling the status line is always rendered.
+  await expect(page.locator("#enabled")).toBeAttached();
 });
 
-test("Status Line page shows Presets section", async ({ page }) => {
+test("Status Line page shows Presets section text", async ({ page }) => {
   await page.goto("/statusline");
 
-  // Presets heading
-  await expect(
-    page.getByRole("heading", { name: /presets/i })
-  ).toBeVisible();
+  // "Presets" section label renders as a CardTitle div — match via text.
+  await expect(page.getByText("Presets").first()).toBeVisible();
 });
 
-test("Status Line page shows Configuration section", async ({ page }) => {
+test("Status Line page shows Configuration section text", async ({ page }) => {
   await page.goto("/statusline");
 
-  // Configuration section heading
-  await expect(
-    page.getByRole("heading", { name: /configuration/i })
-  ).toBeVisible();
+  // "Configuration" section label renders as a CardTitle div — match via text.
+  await expect(page.getByText("Configuration").first()).toBeVisible();
 });

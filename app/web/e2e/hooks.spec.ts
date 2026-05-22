@@ -19,7 +19,7 @@ test("Hooks page renders without console errors", async ({ page }) => {
 
   // The page header title is the most stable element in HooksPage.
   await expect(
-    page.getByRole("heading", { name: "Hooks" })
+    page.getByRole("heading", { name: "Hooks", exact: true })
   ).toBeVisible();
 
   // No console errors during load
@@ -33,7 +33,7 @@ test("Hooks page Add Hook button is present", async ({ page }) => {
   await page.goto("/hooks");
 
   await expect(
-    page.getByRole("heading", { name: "Hooks" })
+    page.getByRole("heading", { name: "Hooks", exact: true })
   ).toBeVisible();
 
   // The Add Hook button should be rendered in the page header.
@@ -46,7 +46,7 @@ test("Hooks page event tabs are rendered", async ({ page }) => {
   await page.goto("/hooks");
 
   await expect(
-    page.getByRole("heading", { name: "Hooks" })
+    page.getByRole("heading", { name: "Hooks", exact: true })
   ).toBeVisible();
 
   // The hooks-by-event section heading should be present.

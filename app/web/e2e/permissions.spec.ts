@@ -43,13 +43,11 @@ test("Permissions page shows rule tabs", async ({ page }) => {
   await expect(page.getByRole("tab", { name: /deny/i })).toBeVisible();
 });
 
-test("Permissions page shows settings card", async ({ page }) => {
+test("Permissions page shows settings area", async ({ page }) => {
   await page.goto("/permissions");
 
-  // Permission Settings heading
-  await expect(
-    page.getByRole("heading", { name: /permission settings/i })
-  ).toBeVisible();
+  // The "Default Permission Mode" label is always present inside the settings card
+  await expect(page.getByText("Default Permission Mode")).toBeVisible();
 });
 
 test("Permissions page Add Allow Rule button opens rule builder", async ({

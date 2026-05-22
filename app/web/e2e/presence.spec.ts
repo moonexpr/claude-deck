@@ -21,9 +21,10 @@ test("Presence page renders without console errors", async ({ page }) => {
   // Page header title is the most stable structural element.
   await expect(page.getByRole("heading", { name: "Presence" })).toBeVisible();
 
-  // The WebSocket indicator or Connect button should be present.
+  // The Connect to Deck button appears in both the header and the empty-state
+  // card — use .first() to avoid strict-mode violation.
   await expect(
-    page.getByRole("button", { name: /connect to deck/i })
+    page.getByRole("button", { name: /connect to deck/i }).first()
   ).toBeVisible();
 
   // No console errors during load
@@ -33,7 +34,7 @@ test("Presence page renders without console errors", async ({ page }) => {
   ).toHaveLength(0);
 });
 
-test("Presence page shows empty state when no sessions", async ({ page }) => {
+test("Presence page shows stats grid", async ({ page }) => {
   const consoleErrors: string[] = [];
 
   page.on("console", (msg) => {
@@ -44,11 +45,13 @@ test("Presence page shows empty state when no sessions", async ({ page }) => {
 
   await page.goto("/presence");
 
-  // Stats grid should be present with four stat cards
-  await expect(page.getByText("Sessions")).toBeVisible();
-  await expect(page.getByText("Active")).toBeVisible();
-  await expect(page.getByText("Errors")).toBeVisible();
-  await expect(page.getByText("Total Events")).toBeVisible();
+  // Stats grid labels are rendered inside CardDescription elements.
+  // Scope to the stats grid container to avoid matching sidebar/tab text.
+  const statsGrid = page.locator(".grid.gap-4.md\\:grid-cols-4");
+  await expect(statsGrid.getByText("Sessions")).toBeVisible();
+  await expect(statsGrid.getByText("Active")).toBeVisible();
+  await expect(statsGrid.getByText("Errors")).toBeVisible();
+  await expect(statsGrid.getByText("Total Events")).toBeVisible();
 
   expect(
     consoleErrors,

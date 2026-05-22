@@ -154,7 +154,7 @@ export const useDashboardStore = create<DashboardStore>((set) => ({
         apiFetch<{ rules: PermissionRule[] }>(ep("permissions")),
         apiFetch<{ commands: unknown[] }>(ep("commands")),
         apiFetch<{ output_styles?: unknown[] }>(ep("output-styles")),
-        apiFetch<SessionStatsResponse>("sessions/stats"),
+        apiFetch<SessionStatsResponse>("sessions/dashboard/stats"),
         apiFetch<ActiveSessionsResponse>("context/active").catch(
           (): ActiveSessionsResponse => ({ sessions: [] }),
         ),

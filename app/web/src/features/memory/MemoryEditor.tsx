@@ -137,7 +137,7 @@ Personal preferences for this project (not committed to git).
     } finally {
       setLoading(false);
     }
-  }, [file]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [file]);
 
   useEffect(() => {
     if (open && file) {
