@@ -84,3 +84,25 @@ items below are deferred to a dedicated security pass:
 scope; the deployment (CF Access + tailnet) is the current auth boundary. Cheap
 hardening was done inline; the structural changes are a separate pass.
 **Status:** open
+
+---
+
+## 2026-05-22 — Post-lift design pass: UI density + UX flows
+
+**Context:** After the Phase B page ports landed, the PROMPTER's review flagged
+a general design direction (not a specific bug): the UI is "too big" overall —
+sizing / density wants tightening across the board — and the "UX loops are near
+non-existent" — interaction flows and task loops are underdeveloped, mostly
+faithful ports of the legacy screens without their own considered flow.
+Specific mobile-UX feedback is reserved by the PROMPTER for a later pass.
+
+**Asked during:** Tauri / portable-pty / CM6 / AI-SDK stack-lift goal session,
+branch `lift/tauri-portable-pty-cm6-aisdk`, end of Phase B.
+
+**Why deferred:** Phase B's scope is feature *parity* — a faithful port of the
+legacy UI onto the new stack. Density and UX-flow redesign is beyond parity; it
+belongs to a dedicated design pass after the lift. Worth pairing with the
+already-logged Hooks-badge redesign — both are the same "make it ours, not just
+ported" workstream.
+
+**Status:** open

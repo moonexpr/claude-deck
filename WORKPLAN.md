@@ -34,7 +34,9 @@ Status legend: ⬜ todo · 🔵 in progress · ✅ done · ⏸ blocked
 
 **Wave outcome:** the parallel worktree wave collapsed (worktree isolation flaky + an account session limit cut 7/10 agents) — recovered in-place via a main-tree recovery wave. Commits: `5a58e81` (wave pile preserved) · `5d567a0` (worktree-branch collect) · `a55b170` (19 page ports) · `3f43e59` (cc-bridge) · `3e60e2c` (e2e green). **Playwright sweep 49/49 green.**
 
-**Phase B gate — 6 / 7 met** (7th = PROMPTER's LAN device check): ✅(1) all 20 pages render w/o console errors vs server-bin · ✅(2) Playwright sweep 59/59 green · ✅(3) cc-bridge functional + same-origin enforced (6 Rust tests) · ✅(4) mobile-responsive iPhone-375 (`mobile.spec.ts` 10/10) · ◐(5) LAN — `server-bin` binds `*:8000`; cross-device tailnet check pending PROMPTER · ✅(6) no DB schema change · ✅(7) legacy `backend/`+`frontend/` untouched (`git diff main` empty).
+**Phase B gate — ✅ 7 / 7 — PHASE B COMPLETE:** ✅(1) all 20 pages render w/o console errors vs server-bin · ✅(2) Playwright sweep 61/61 green · ✅(3) cc-bridge functional + same-origin enforced (6 Rust tests) · ✅(4) mobile-responsive iPhone-375 (`mobile.spec.ts`) · ✅(5) LAN — `server-bin` reachable + serving the UI over the tailnet, PROMPTER-confirmed · ✅(6) no DB schema change · ✅(7) legacy `backend/`+`frontend/` untouched (`git diff main` empty).
+
+Post-Phase-B fixes from the PROMPTER's hands-on tailnet review: `server-bin` `FRONTEND_DIST` (blank page) · mobile drawer rebuilt — position, scroll, single X, bordered links (`248a93c`, `c3ab7f9`) · SPA deep-link 404 → 200 (`db59a14`). Deferred to `docs/requests/INBOX.md`: post-lift design pass (UI density + UX flows), Hooks-badge redesign, CM6 for config renders, cc-bridge auth hardening.
 
 **Phase B gate:** all 7 feature-parity validators pass (see `.claude/HANDOFF.md` §5).
 
