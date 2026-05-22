@@ -54,14 +54,20 @@ C6's scope or keep it a separate follow-up.
 auth-surface issues. The lift's scope was to *preserve* the legacy same-origin +
 token mechanism, and it did — these are inherited legacy flaws, not lift
 regressions, and the deployment mitigates them (Cloudflare Access in front; LAN
-over the Tailscale tailnet). Two cheap items (reject missing-`Origin`; tighten
-the localhost-port exemption) were fixed inline during the lift; the structural
+over the Tailscale tailnet). One cheap item — rejecting an absent `Origin`
+header — was fixed inline during the lift (commit on `lift/...`); the structural
 items below are deferred to a dedicated security pass:
 
 - **Unauthenticated token endpoint** — `GET /api/v1/cc-bridge/token`
   (`cc_bridge/mod.rs` ~L553) has no auth of its own; any client reaching the
   server can mint a 30s terminal token. Decide the auth boundary (rely on CF
   Access / tailnet, or add app-level auth) and document it.
+- **localhost-port exemption too broad** — `is_same_origin` (`cc_bridge/mod.rs`)
+  exempts any `localhost` / `127.0.0.1` / `[::1]` origin regardless of port, so
+  any local process serving a page can open a terminal WS. It cannot be naively
+  port-matched: the Tauri webview origin is `tauri://localhost` (no port) while
+  the embedded server uses an ephemeral port — a port-match would reject Tauri.
+  Needs a deliberate fix (e.g. explicit allowlist of the real frontends).
 - **API-wide permissive CORS** — `lib.rs` ~L107 sets `allow_origin(Any)` /
   `allow_methods(Any)` / `allow_headers(Any)` for the whole API. Scope it to the
   known frontends (LAN origin + `tauri://localhost`).
