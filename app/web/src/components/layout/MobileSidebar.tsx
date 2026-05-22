@@ -22,7 +22,7 @@ export function MobileSidebar() {
       <DialogPortal>
         <DialogOverlay />
         <DialogContent
-          className="fixed inset-y-0 left-0 z-50 h-full w-[280px] border-r bg-background p-0 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left"
+          className="fixed inset-y-0 left-0 z-50 h-full w-[280px] translate-x-0 translate-y-0 border-r bg-background p-0 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-top-0 data-[state=open]:slide-in-from-top-0"
         >
           <DialogTitle className="sr-only">Navigation Menu</DialogTitle>
 
