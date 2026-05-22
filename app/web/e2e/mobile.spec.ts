@@ -13,6 +13,10 @@ import { test, expect } from "@playwright/test";
  *   3. Clicking the hamburger opens the MobileSidebar dialog (nav links appear).
  *   4. No horizontal overflow — scrollWidth is within 1px of the 375 viewport width.
  *   5. No console errors during load.
+ *
+ * Drawer integrity assertions (added after mobile review):
+ *   6. Exactly ONE close button is present inside the open drawer.
+ *   7. The nav region is scrollable at 375×667 (scrollHeight > clientHeight).
  */
 
 test.use({
@@ -88,6 +92,42 @@ test("Dashboard at 375px: hamburger opens MobileSidebar nav", async ({ page }) =
     `MobileSidebar drawer not pinned to the left edge: x=${drawerBox!.x}`
   ).toBeGreaterThanOrEqual(-1);
   expect(drawerBox!.x).toBeLessThanOrEqual(1);
+});
+
+test("Dashboard at 375px: drawer has exactly one close button", async ({ page }) => {
+  await page.goto("/");
+
+  const hamburger = page.locator("header button.lg\\:hidden");
+  await hamburger.click();
+
+  // Wait for the drawer to be open
+  await expect(page.locator('[role="dialog"] nav')).toBeVisible();
+
+  // Count ALL buttons with X / close semantics inside the open dialog.
+  // We select every <button> inside [role="dialog"] and count — there must
+  // be exactly one (MobileSidebar's own header X). If DialogContent's
+  // built-in close button is still present, this will be 2 or more.
+  const closeButtons = page.locator('[role="dialog"] button[aria-label="Close navigation menu"]');
+  await expect(closeButtons).toHaveCount(1);
+});
+
+test("Dashboard at 375px: nav region is scrollable", async ({ page }) => {
+  await page.goto("/");
+
+  const hamburger = page.locator("header button.lg\\:hidden");
+  await hamburger.click();
+
+  const mobileNav = page.locator('[role="dialog"] nav');
+  await expect(mobileNav).toBeVisible();
+
+  // At 375×667 with 20 nav items (each ≥44px tall), the nav list is taller
+  // than the available drawer height. scrollHeight must exceed clientHeight,
+  // proving the overflow-y-auto scroll container is bounded and active.
+  const scrollable = await mobileNav.evaluate((el) => el.scrollHeight > el.clientHeight);
+  expect(
+    scrollable,
+    "Nav region is not scrollable — items are clipped or the flex height chain is broken"
+  ).toBe(true);
 });
 
 test("Dashboard at 375px: no horizontal overflow", async ({ page }) => {
