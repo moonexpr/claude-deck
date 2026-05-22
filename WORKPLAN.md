@@ -17,7 +17,7 @@ Status legend: ⬜ todo · 🔵 in progress · ✅ done · ⏸ blocked
 - ✅ **A5** Zustand stores `useProjectStore`, `useDashboardStore`; MainLayout consumes — `00ad63e`
 - ✅ **A6** `CodeEditor` component (CM6 markdown mode) + demo route — `4240603`
 - ✅ **A7** `/api/v1/ai/chat` returns 501 + key-source diagnostics; AI SDK client wired, disabled — `fdc9ce5`
-- 🔵 **A8** Smoke harness — Rust route tests + Playwright nav config + one passing test — **IN PROGRESS** (`luke`)
+- 🔵 **A8** Smoke harness — Rust route tests + Playwright nav config + one passing test — **PARTIAL**: Part 1 `core/tests/routes.rs` written but uncommitted & not compiling (missing `tower`/`http-body-util` dev-deps); Part 2 Playwright not started. Engineer hit a session limit. Finish per `.claude/HANDOFF.md` §4.
 
 **Phase A gate:** all 6 scaffolded validators in the plan pass.
 
