@@ -18,6 +18,7 @@ pub mod plugins;
 pub mod statusline;
 pub mod cc_bridge;
 pub mod context;
+pub mod ai;
 
 use axum::{
     routing::get,
@@ -42,6 +43,10 @@ pub struct ApiState {
     /// query param was provided. Captured once by the embedder; never via
     /// `std::env::current_dir()` inside the library.
     pub cwd_fallback: PathBuf,
+    /// Anthropic API key resolved by the embedder. `None` means no key was
+    /// configured. Carried here so `ai::post_chat` can report the diagnostic
+    /// boolean without reading `std::env`.
+    pub anthropic_api_key: Option<String>,
 }
 
 pub fn router(
@@ -50,6 +55,7 @@ pub fn router(
     presence_public_url: Option<String>,
     enable_external_tools: bool,
     cwd_fallback: PathBuf,
+    anthropic_api_key: Option<String>,
 ) -> Router {
     let state = ApiState {
         pool,
@@ -57,6 +63,7 @@ pub fn router(
         presence_public_url,
         enable_external_tools,
         cwd_fallback,
+        anthropic_api_key,
     };
 
     Router::new()
@@ -81,6 +88,7 @@ pub fn router(
         .nest("/statusline", statusline::router())
         .nest("/cc-bridge", cc_bridge::router())
         .nest("/context", context::router())
+        .nest("/ai", ai::router())
         .with_state(state)
 }
 

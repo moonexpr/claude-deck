@@ -111,7 +111,7 @@ pub async fn app(config: ServerConfig) -> anyhow::Result<axum::Router> {
     // Build our application
     let mut router = Router::new()
         .route("/health", get(health))
-        .nest("/api/v1", api::v1::router(pool, config.projects_dir, config.presence_public_url, config.enable_external_tools, config.cwd_fallback))
+        .nest("/api/v1", api::v1::router(pool, config.projects_dir, config.presence_public_url, config.enable_external_tools, config.cwd_fallback, config.anthropic_api_key))
         .layer(cors);
 
     // Mount static frontend serving only when a dist path was supplied.
