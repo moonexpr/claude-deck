@@ -44,3 +44,37 @@ currently cover. Whoever picks this up should decide whether to fold it into
 C6's scope or keep it a separate follow-up.
 
 **Status:** open
+
+---
+
+## 2026-05-22 — Harden cc-bridge auth surface (deferred security pass)
+
+**Context:** A `john` security review of cc-bridge v2
+(`app/server/core/src/cc_bridge/`) during the stack lift surfaced structural
+auth-surface issues. The lift's scope was to *preserve* the legacy same-origin +
+token mechanism, and it did — these are inherited legacy flaws, not lift
+regressions, and the deployment mitigates them (Cloudflare Access in front; LAN
+over the Tailscale tailnet). Two cheap items (reject missing-`Origin`; tighten
+the localhost-port exemption) were fixed inline during the lift; the structural
+items below are deferred to a dedicated security pass:
+
+- **Unauthenticated token endpoint** — `GET /api/v1/cc-bridge/token`
+  (`cc_bridge/mod.rs` ~L553) has no auth of its own; any client reaching the
+  server can mint a 30s terminal token. Decide the auth boundary (rely on CF
+  Access / tailnet, or add app-level auth) and document it.
+- **API-wide permissive CORS** — `lib.rs` ~L107 sets `allow_origin(Any)` /
+  `allow_methods(Any)` / `allow_headers(Any)` for the whole API. Scope it to the
+  known frontends (LAN origin + `tauri://localhost`).
+- **Unbounded token store** — the `cc_bridge/mod.rs` token map is only swept on
+  issuance; add a size cap / background eviction.
+- **No concurrent-session cap** — unlimited simultaneous PTY sessions; add a
+  per-client / global cap before spawn.
+- **`rand_token` weak fallback** — the non-`/dev/urandom` fallback is
+  deterministic; make it a hard error instead of a silent downgrade.
+
+**Asked during:** stack-lift goal session, branch
+`lift/tauri-portable-pty-cm6-aisdk`, Phase B.
+**Why deferred:** PROMPTER's call — out of the lift's "preserve, don't redesign"
+scope; the deployment (CF Access + tailnet) is the current auth boundary. Cheap
+hardening was done inline; the structural changes are a separate pass.
+**Status:** open
