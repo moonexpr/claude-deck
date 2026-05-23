@@ -92,6 +92,11 @@ pub async fn app(config: ServerConfig) -> anyhow::Result<axum::Router> {
         .connect(&config.db_url)
         .await?;
 
+    // Run embedded migrations (sqlx tracks applied migrations in
+    // `_sqlx_migrations`; each migration is idempotent via `IF NOT EXISTS`
+    // guards in addition to the migration table itself).
+    sqlx::migrate!("./migrations").run(&pool).await?;
+
     // Schema bootstrap. Per-module ensure functions create projects/backups/
     // presence_* tables on first use; these two are the only tables no module
     // creates (mcp + usage degrade gracefully if absent, but creating them up
