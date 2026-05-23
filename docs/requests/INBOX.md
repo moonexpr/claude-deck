@@ -106,3 +106,58 @@ already-logged Hooks-badge redesign — both are the same "make it ours, not jus
 ported" workstream.
 
 **Status:** open
+
+---
+
+## 2026-05-23 — Theme inconsistency in mobile chrome (header + footer)
+
+**Context:** Spotted from an iPhone Safari screenshot hitting the dev server at
+`http://100.126.111.105:8000/projects` (tailnet path) during the presence demo
+setup. The page **body** renders correctly in light mode — white project cards,
+black text, `bg-background` honored — but the **header band** (hamburger /
+terminal logo / dark-mode toggle row) and the **footer band** (`Claude Deck
+v0.0.1 · GitHub`) render as dark gray against the otherwise light page.
+
+The moon-icon state in the header confirms the app is *currently* set to light
+mode (the icon offers to flip *to* dark). So this isn't a user-toggled state —
+the chrome surfaces are theme-inconsistent with the body.
+
+**Likely causes (whichever picks up should verify first):**
+
+1. **Hardcoded surface tokens.** Header / footer components in
+   `app/web/src/components/layout/` may use a literal `bg-card` /
+   `bg-zinc-900` / `bg-slate-800` instead of a `@theme`-bound token that flips
+   under `class="dark"`.
+2. **`prefers-color-scheme` leak past the `class="dark"` strategy.** The iOS
+   device is presumably set to system dark mode. Tailwind v4 with the
+   `@theme` directive interacts with `@media (prefers-color-scheme: dark)`
+   differently than v3 — if the header/footer's tokens resolve through the
+   media query while the body resolves through the class, you get exactly this
+   split.
+
+**Where to look first:**
+- `app/web/src/components/layout/MainLayout.tsx` (or whatever wraps the page)
+- `app/web/src/components/layout/PageHeader.tsx`
+- Any sibling `AppFooter` / `SiteFooter` component
+- `app/web/src/index.css` `@theme` block — confirm the surface tokens
+  (`--background`, `--card`, `--popover`, etc.) have both light + dark values
+  and that the `.dark` selector flips them rather than a `@media` query
+
+**Minor adjacent fixes (same component sweep):**
+- Card action buttons ("Set Active" / "Remove") inside the project cards
+  render as ghost-style with no visible background. Either give them a subtle
+  background or use shadcn `Button variant="outline"`.
+- Path search input lets Safari spell-check the path (red squiggle under "jc").
+  Add `autocorrect="off" autocapitalize="off" spellcheck={false}` to path
+  inputs.
+
+**Asked during:** stack-lift goal session, branch
+`lift/tauri-portable-pty-cm6-aisdk`, during the presence demo prep
+(2026-05-23, post-Phase-D).
+
+**Why deferred:** Demo focus — surfaced via screenshot mid-prep, not blocking
+the presence demo (the UI is fully usable, just visually inconsistent on the
+chrome bands). Naturally belongs to the broader post-lift design pass
+workstream above — file together when picking either up.
+
+**Status:** open
