@@ -40,16 +40,18 @@ Post-Phase-B fixes from the PROMPTER's hands-on tailnet review: `server-bin` `FR
 
 **Phase B gate:** all 7 feature-parity validators pass (see `.claude/HANDOFF.md` §5).
 
-## Phase C — New AI surfaces
+## Phase C — New AI surfaces  ·  plan: `.claude/plans/phase-c-ai-surfaces.md`
 
-- ⬜ **C1** Server AI proxy `/api/v1/ai/chat` + `/suggest`
-- ⬜ **C2** Tauri keyring → `ServerConfig::anthropic_api_key`
-- ⬜ **C3** Chat panel feature + `sqlx-migrate` + `chat_conversations` table
-- ⬜ **C4** cc-bridge AI augmentation (confirm-before-exec gate)
-- ⬜ **C5** AI-assisted config editing — Agents page template
-- ⬜ **C6** CM6 for JSON surfaces: MCP, Permissions
+**Execution order:** C1 → C2 → C3 → ‖ C4 ‖ C5 ‖ C6 ‖. C4/C5/C6 are a parallel wave (disjoint feature dirs).
 
-**Phase C gate:** all 5 new-surface validators pass.
+- ✅ **C1** Server AI proxy — `/api/v1/ai/chat` (streaming Vercel Data-Stream) + `/suggest` (single-shot). reqwest + eventsource-stream → Anthropic Messages API. Integration tests 3/3 green. — `beed898` (service layer + `ServerConfig.anthropic_base_url`) · `60d7372` (handlers) · `d178132` (3 integration tests)
+- ⬜ **C2** Tauri keyring → `ServerConfig.anthropic_api_key`. Raw `keyring` crate (no plugin). — `timothy`
+- ⬜ **C3** Chat panel feature + first `sqlx::migrate!` (migration `0001_chat_conversations.sql`, single table, messages as JSON-as-TEXT). — `isaiah` + `david`
+- ⬜ **C4** cc-bridge AI augmentation — split-pane terminal+AI, inline preview with [Send]/[Edit]/[Discard], zero auto-exec. — `isaiah` + `john`
+- ⬜ **C5** AI-assisted config editing — Agents page template + reusable `AI_SUGGEST_PATTERN.md`. — `david` + `isaiah`
+- ⬜ **C6** CM6 for JSON surfaces — MCP, Permissions edit dialogs. — `david`
+
+**Phase C gate (7):** (1) `useChat` streams, no `x-api-key` in browser · (2) Tauri keyring path works offline-after-key · (3) stub `<execute>` → zero PTY bytes pre-Send · (4) Agents AI-suggest → CM6 → PUT round-trip · (5) `sqlx::migrate!` clean on fresh + Phase-B DB · (6) Playwright sweep ≥65/65 · (7) `git diff main -- backend/ frontend/` empty.
 
 ## Phase D — Build / cutover
 
