@@ -1,6 +1,7 @@
 #!/bin/bash
-# Initial setup script
-# Creates virtual environment, installs dependencies, initializes database
+# Initial setup script — installs dependencies for the app/ tree.
+#
+# Prerequisites: Rust 1.85+ (edition 2024) via rustup, Node.js 18+.
 
 set -e
 
@@ -14,47 +15,32 @@ if ! command -v cargo &> /dev/null; then
     echo "Error: Rust/Cargo not found. Please install Rust (https://rustup.rs/)."
     exit 1
 fi
-
-RUST_VERSION=$(cargo --version)
-echo "Found Rust $RUST_VERSION"
+echo "Found Rust: $(cargo --version)"
 
 # Check Node.js
-if ! command -v node &> /dev/null; then
-    echo "Error: Node.js not found. Please install Node.js 18+."
+if ! command -v npm &> /dev/null; then
+    echo "Error: Node.js/npm not found. Please install Node 18+."
     exit 1
 fi
+echo "Found Node: $(node --version)"
 
-NODE_VERSION=$(node --version)
-echo "Found Node.js $NODE_VERSION"
-
-# Setup backend
+# Compile server-core + server-bin (the embedded backend + standalone binary)
 echo ""
-echo "Setting up backend..."
-cd "$PROJECT_ROOT/backend"
+echo "Building server (this can take a few minutes on first run)..."
+cd "$PROJECT_ROOT/app/server"
+cargo build -p server-core -p server-bin
 
-echo "Building Rust backend..."
-cargo build
-
-# Initialize database (handled on first run by axum startup)
-echo "Backend setup complete!"
-
-# Setup frontend
+# Install web dependencies
 echo ""
-echo "Setting up frontend..."
-cd "$PROJECT_ROOT/frontend"
-
-echo "Installing Node.js dependencies..."
+echo "Installing web dependencies..."
+cd "$PROJECT_ROOT/app/web"
 npm install
 
-echo "Frontend setup complete!"
-
-# Create required directories
-echo ""
-echo "Creating required directories..."
-mkdir -p ~/.claude-registry/backups
+# Database is created on first server-bin run via sqlx::migrate! — no init step.
 
 echo ""
-echo "Setup complete!"
+echo "Setup complete. Run ./scripts/dev.sh to start both servers."
 echo ""
-echo "To start development servers, run:"
-echo "  ./scripts/dev.sh"
+echo "Optional: install Tauri for the desktop app:"
+echo "  cargo install tauri-cli --version '^2.0'"
+echo "  cd app/desktop && cargo tauri dev"
