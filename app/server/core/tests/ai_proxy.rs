@@ -55,6 +55,11 @@ fn make_config_with_key(
 /// POST body for a minimal chat request.
 const CHAT_BODY: &str = r#"{"messages":[{"role":"user","content":"hi"}]}"#;
 
+// Origin + Host used by all test requests so the same-origin check passes.
+// Absent-Origin requests now return 403 (parity with cc-bridge WS).
+const TEST_HOST: &str = "127.0.0.1:8000";
+const TEST_ORIGIN: &str = "http://127.0.0.1:8000";
+
 // ---------------------------------------------------------------------------
 // Test 1: no key → 503
 // ---------------------------------------------------------------------------
@@ -77,6 +82,8 @@ async fn no_key_returns_503() {
         .method("POST")
         .uri("/api/v1/ai/chat")
         .header("content-type", "application/json")
+        .header("origin", TEST_ORIGIN)
+        .header("host", TEST_HOST)
         .body(Body::from(CHAT_BODY))
         .unwrap();
 
@@ -135,6 +142,8 @@ async fn bad_upstream_returns_502() {
         .method("POST")
         .uri("/api/v1/ai/chat")
         .header("content-type", "application/json")
+        .header("origin", TEST_ORIGIN)
+        .header("host", TEST_HOST)
         .body(Body::from(CHAT_BODY))
         .unwrap();
 
@@ -216,6 +225,8 @@ async fn happy_path_streams_data_frames() {
         .method("POST")
         .uri("/api/v1/ai/chat")
         .header("content-type", "application/json")
+        .header("origin", TEST_ORIGIN)
+        .header("host", TEST_HOST)
         .body(Body::from(CHAT_BODY))
         .unwrap();
 
@@ -251,10 +262,22 @@ async fn happy_path_streams_data_frames() {
         body_str
     );
 
-    // Must contain a d: finalization frame with finishReason:stop
+    // Must contain a d: finalization frame with finishReason:stop and
+    // accurate token counts accumulated from message_start (input_tokens:10)
+    // and message_delta (output_tokens:5) in the canned SSE stream above.
     assert!(
         body_str.contains("d:{") && body_str.contains("\"finishReason\":\"stop\""),
         "body must contain d: frame with finishReason:stop; got: {:?}",
+        body_str
+    );
+    assert!(
+        body_str.contains("\"promptTokens\":10"),
+        "d: frame must carry promptTokens:10 (from message_start); got: {:?}",
+        body_str
+    );
+    assert!(
+        body_str.contains("\"completionTokens\":5"),
+        "d: frame must carry completionTokens:5 (from message_delta); got: {:?}",
         body_str
     );
 

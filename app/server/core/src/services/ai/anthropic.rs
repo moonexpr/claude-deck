@@ -26,8 +26,12 @@ const DEFAULT_MAX_TOKENS: u32 = 4096;
 pub enum AnthropicEvent {
     /// A text delta from a content_block_delta event.
     TextDelta { text: String },
-    /// The message is complete; carries final token usage.
-    MessageStop { usage: Usage },
+    /// Carries token usage from `message_start` or `message_delta`.
+    /// The proxy accumulates these across the stream so the final `d:` frame
+    /// contains accurate counts rather than zeros.
+    UsageUpdate { input_tokens: u64, output_tokens: u64 },
+    /// The message is complete; the proxy emits the `d:` frame.
+    MessageStop,
     /// Any other event type — we skip these.
     Other,
 }
@@ -140,57 +144,48 @@ fn parse_event(event_type: &str, data: &str) -> anyhow::Result<AnthropicEvent> {
         "content_block_delta" => {
             let raw: RawContentBlockDelta =
                 serde_json::from_str(data).unwrap_or(RawContentBlockDelta { delta: None });
-            if let Some(delta) = raw.delta {
-                if delta.kind == "text_delta" {
+            if let Some(delta) = raw.delta
+                && delta.kind == "text_delta" {
                     return Ok(AnthropicEvent::TextDelta {
                         text: delta.text.unwrap_or_default(),
                     });
                 }
-            }
             Ok(AnthropicEvent::Other)
         }
         "message_delta" => {
-            // message_delta carries cumulative usage in streaming mode
+            // message_delta carries cumulative output_tokens in streaming mode.
             let raw: RawMessageDelta =
                 serde_json::from_str(data).unwrap_or(RawMessageDelta { usage: None });
-            let usage = raw.usage.map(|u| Usage {
-                input_tokens: u.input_tokens.unwrap_or(0),
-                output_tokens: u.output_tokens.unwrap_or(0),
-            });
-            // We defer the stop event until message_stop; stash nothing here.
-            let _ = usage;
-            Ok(AnthropicEvent::Other)
+            let (input, output) = raw
+                .usage
+                .map(|u| (u.input_tokens.unwrap_or(0), u.output_tokens.unwrap_or(0)))
+                .unwrap_or((0, 0));
+            Ok(AnthropicEvent::UsageUpdate { input_tokens: input, output_tokens: output })
         }
         "message_stop" => {
-            // usage is not in message_stop; it's in message_start / message_delta.
-            // We emit a stop event with usage=0 here; the handler accumulates
-            // usage from message_delta if available. For now this is fine because
-            // the Vercel Data Stream `d:` frame just needs a finish reason.
-            Ok(AnthropicEvent::MessageStop {
-                usage: Usage {
-                    input_tokens: 0,
-                    output_tokens: 0,
-                },
-            })
+            // usage lives in message_start / message_delta — the proxy accumulates
+            // it via UsageUpdate events. We emit a bare MessageStop here; the
+            // proxy inserts the accumulated counts into the `d:` frame.
+            Ok(AnthropicEvent::MessageStop)
         }
         "message_start" => {
-            // Carries initial usage (e.g. input_tokens). Parse and stash for stop.
+            // Carries initial input_tokens (prompt token count) for the request.
             let raw: RawMessage = serde_json::from_str(data)
                 .map(|r: serde_json::Value| RawMessage {
                     usage: r
                         .get("message")
                         .and_then(|m| m.get("usage"))
-                        .and_then(|u| serde_json::from_value(u.clone()).ok())
-                        .and_then(|u: RawUsage| {
-                            Some(RawUsage {
+                        .and_then(|u| serde_json::from_value(u.clone()).ok()).map(|u: RawUsage| RawUsage {
                                 input_tokens: u.input_tokens,
                                 output_tokens: u.output_tokens,
-                            })
-                        }),
+                            }),
                 })
                 .unwrap_or(RawMessage { usage: None });
-            let _ = raw;
-            Ok(AnthropicEvent::Other)
+            let (input, output) = raw
+                .usage
+                .map(|u| (u.input_tokens.unwrap_or(0), u.output_tokens.unwrap_or(0)))
+                .unwrap_or((0, 0));
+            Ok(AnthropicEvent::UsageUpdate { input_tokens: input, output_tokens: output })
         }
         _ => Ok(AnthropicEvent::Other),
     }
