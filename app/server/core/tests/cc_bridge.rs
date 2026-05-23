@@ -11,7 +11,6 @@
 ///   4. `bad_origin_rejected`      – mismatched Origin closes with code 4403
 ///   5. `missing_origin_rejected`  – absent Origin closes with code 4403
 ///   6. `child_killed_on_disconnect` – spawned child is dead after WS close
-
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -36,8 +35,7 @@ async fn start_server() -> String {
     // Use process id + nanosecond timestamp for a unique temp directory.
     // Two parallel tests could theoretically collide at nanosecond granularity;
     // the static counter below prevents that.
-    static COUNTER: std::sync::atomic::AtomicU32 =
-        std::sync::atomic::AtomicU32::new(0);
+    static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let tmp = std::env::temp_dir().join(format!(
         "cc_bridge_test_{}_{}_{n}",
@@ -222,9 +220,8 @@ async fn resize_accepted() {
 
     ws.send(open_frame()).await.expect("send Open");
 
-    let resize = Message::text(
-        serde_json::json!({"kind":"resize","cols":120,"rows":40}).to_string(),
-    );
+    let resize =
+        Message::text(serde_json::json!({"kind":"resize","cols":120,"rows":40}).to_string());
     ws.send(resize).await.expect("send Resize");
 
     // Verify connection is still live by sending another stdin byte.
@@ -236,10 +233,7 @@ async fn resize_accepted() {
     let result = tokio::time::timeout(Duration::from_millis(400), ws.next()).await;
     match result {
         Ok(Some(Ok(Message::Close(Some(cf))))) => {
-            panic!(
-                "unexpected Close after Resize: code={}",
-                u16::from(cf.code)
-            );
+            panic!("unexpected Close after Resize: code={}", u16::from(cf.code));
         }
         Ok(Some(Err(e))) => {
             panic!("WS error after Resize: {}", e);
@@ -284,11 +278,11 @@ async fn child_exit_frame() {
         }
         match tokio::time::timeout(remaining, ws.next()).await {
             Ok(Some(Ok(Message::Text(t)))) => {
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(t.as_str()) {
-                    if v["kind"] == "exit" {
-                        got_exit = true;
-                        break;
-                    }
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(t.as_str())
+                    && v["kind"] == "exit"
+                {
+                    got_exit = true;
+                    break;
                 }
             }
             Ok(Some(Ok(Message::Close(_)))) | Ok(None) => {
@@ -350,7 +344,10 @@ async fn bad_origin_rejected() {
         }
     }
 
-    assert!(got_4403, "expected Close(4403) for mismatched Origin, but it did not arrive");
+    assert!(
+        got_4403,
+        "expected Close(4403) for mismatched Origin, but it did not arrive"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -472,8 +469,7 @@ async fn child_killed_on_disconnect() {
                 panic!("child never wrote its PID file at {}", pid_file.display());
             }
             if pid_file.exists() {
-                let contents = std::fs::read_to_string(&pid_file)
-                    .expect("read PID file");
+                let contents = std::fs::read_to_string(&pid_file).expect("read PID file");
                 let pid_str = contents.trim().to_string();
                 if let Ok(pid) = pid_str.parse::<u32>() {
                     break pid;

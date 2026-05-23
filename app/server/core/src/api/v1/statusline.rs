@@ -1,12 +1,12 @@
 // PORTED: statusline_service.py + api/v1/statusline.py
 
 use axum::{
+    Router,
     extract::{Json, Path},
     routing::{get, post},
-    Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::io::Write as _;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -19,7 +19,10 @@ pub fn router() -> Router<ApiState> {
     // Python: APIRouter(prefix="/statusline"); nested under /statusline.
     // `@router.get("")` / `@router.put("")` -> the nested base path.
     Router::new()
-        .route("/", get(get_statusline_config).put(update_statusline_config))
+        .route(
+            "/",
+            get(get_statusline_config).put(update_statusline_config),
+        )
         .route("/presets", get(get_statusline_presets))
         .route("/apply-preset/{preset_id}", post(apply_statusline_preset))
         .route("/script", post(save_custom_script))
@@ -337,9 +340,7 @@ async fn preview_script(script_content: &str, timeout: u64) -> (bool, String, Op
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if let Err(e) =
-            std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o700))
-        {
+        if let Err(e) = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o700)) {
             let _ = std::fs::remove_file(&tmp);
             return (false, String::new(), Some(e.to_string()));
         }
@@ -350,7 +351,10 @@ async fn preview_script(script_content: &str, timeout: u64) -> (bool, String, Op
     result
 }
 
-async fn run_preview(script_path: &std::path::Path, timeout: u64) -> (bool, String, Option<String>) {
+async fn run_preview(
+    script_path: &std::path::Path,
+    timeout: u64,
+) -> (bool, String, Option<String>) {
     use tokio::io::AsyncWriteExt;
     use tokio::process::Command;
 
@@ -376,7 +380,10 @@ async fn run_preview(script_path: &std::path::Path, timeout: u64) -> (bool, Stri
         Err(_) => (
             false,
             String::new(),
-            Some(format!("Script execution timed out after {} seconds", timeout)),
+            Some(format!(
+                "Script execution timed out after {} seconds",
+                timeout
+            )),
         ),
         Ok(Err(e)) => (false, String::new(), Some(e.to_string())),
         Ok(Ok(out)) => {
@@ -437,12 +444,10 @@ async fn get_statusline_config() -> AppResult<Json<Value>> {
 }
 
 /// PUT /api/v1/statusline
-async fn update_statusline_config(
-    Json(update): Json<StatusLineUpdate>,
-) -> AppResult<Json<Value>> {
-    update_config(&update)
-        .map(Json)
-        .map_err(|e| AppError::internal(format!("Failed to update status line config: {}", e.detail)))
+async fn update_statusline_config(Json(update): Json<StatusLineUpdate>) -> AppResult<Json<Value>> {
+    update_config(&update).map(Json).map_err(|e| {
+        AppError::internal(format!("Failed to update status line config: {}", e.detail))
+    })
 }
 
 /// GET /api/v1/statusline/presets
@@ -452,12 +457,13 @@ async fn get_statusline_presets() -> AppResult<Json<Value>> {
 }
 
 /// POST /api/v1/statusline/apply-preset/{preset_id}
-async fn apply_statusline_preset(
-    Path(preset_id): Path<String>,
-) -> AppResult<Json<Value>> {
+async fn apply_statusline_preset(Path(preset_id): Path<String>) -> AppResult<Json<Value>> {
     let presets = statusline_presets();
     let Some(preset) = presets.iter().find(|p| p.id == preset_id) else {
-        return Err(AppError::not_found(format!("Preset not found: {}", preset_id)));
+        return Err(AppError::not_found(format!(
+            "Preset not found: {}",
+            preset_id
+        )));
     };
 
     write_script(preset.script)
@@ -490,9 +496,7 @@ async fn save_custom_script(Json(script_content): Json<String>) -> AppResult<Jso
 }
 
 /// POST /api/v1/statusline/preview
-async fn preview_statusline_script(
-    Json(req): Json<PreviewRequest>,
-) -> AppResult<Json<Value>> {
+async fn preview_statusline_script(Json(req): Json<PreviewRequest>) -> AppResult<Json<Value>> {
     let (success, output, error) = preview_script(&req.script, 5).await;
     Ok(Json(json!({
         "success": success,
@@ -514,9 +518,7 @@ async fn get_powerline_presets() -> AppResult<Json<Value>> {
 }
 
 /// POST /api/v1/statusline/apply-powerline/{preset_id}
-async fn apply_powerline_preset(
-    Path(preset_id): Path<String>,
-) -> AppResult<Json<Value>> {
+async fn apply_powerline_preset(Path(preset_id): Path<String>) -> AppResult<Json<Value>> {
     let presets = powerline_presets();
     let Some(preset) = presets.iter().find(|p| p.id == preset_id) else {
         return Err(AppError::not_found(format!(

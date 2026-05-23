@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use anyhow::Context;
-use server_core::{app, ServerConfig};
+use server_core::{ServerConfig, app};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -34,7 +34,8 @@ async fn main() -> anyhow::Result<()> {
                 .join("projects")
         });
 
-    let frontend_dist_path: Option<PathBuf> = std::env::var("FRONTEND_DIST").ok().map(PathBuf::from);
+    let frontend_dist_path: Option<PathBuf> =
+        std::env::var("FRONTEND_DIST").ok().map(PathBuf::from);
 
     let presence_public_url: Option<String> = std::env::var("PRESENCE_PUBLIC_URL").ok();
 
@@ -48,8 +49,8 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(true);
 
     // Capture CWD once here so the library never reads it.
-    let cwd_fallback: PathBuf = std::env::current_dir()
-        .context("could not determine current working directory")?;
+    let cwd_fallback: PathBuf =
+        std::env::current_dir().context("could not determine current working directory")?;
 
     // ---- Bind address -------------------------------------------------------
 

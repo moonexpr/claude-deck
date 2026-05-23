@@ -1,11 +1,11 @@
 // PORTED: context_service.py + api/v1/context.py
 
 use axum::{
+    Json, Router,
     extract::{Path as AxumPath, State},
     routing::get,
-    Json, Router,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -198,14 +198,28 @@ async fn get_active_sessions() -> AppResult<Json<Value>> {
     }
 
     sessions.sort_by(|a, b| {
-        let a_active = a.get("is_active").and_then(|v| v.as_bool()).unwrap_or(false);
-        let b_active = b.get("is_active").and_then(|v| v.as_bool()).unwrap_or(false);
-        let a_pct = a.get("context_percentage").and_then(|v| v.as_f64()).unwrap_or(0.0);
-        let b_pct = b.get("context_percentage").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let a_active = a
+            .get("is_active")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let b_active = b
+            .get("is_active")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let a_pct = a
+            .get("context_percentage")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let b_pct = b
+            .get("context_percentage")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
         // Python key: (not is_active, -context_percentage)
-        (!a_active)
-            .cmp(&(!b_active))
-            .then((-a_pct).partial_cmp(&(-b_pct)).unwrap_or(std::cmp::Ordering::Equal))
+        (!a_active).cmp(&(!b_active)).then(
+            (-a_pct)
+                .partial_cmp(&(-b_pct))
+                .unwrap_or(std::cmp::Ordering::Equal),
+        )
     });
 
     Ok(Json(json!({ "sessions": sessions })))
@@ -355,7 +369,11 @@ fn get_context_composition(model: &str, current_context_tokens: i64, message_cha
 
     let total_tokens: i64 = categories
         .iter()
-        .map(|c| c.get("estimated_tokens").and_then(|v| v.as_i64()).unwrap_or(0))
+        .map(|c| {
+            c.get("estimated_tokens")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0)
+        })
         .sum();
 
     json!({
@@ -502,10 +520,13 @@ async fn get_session_context(
                     if tool_name == "Read" {
                         if let Some(fp) = tool_input.get("file_path").and_then(|v| v.as_str()) {
                             if !fp.is_empty() {
-                                file_reads.entry(fp.to_string()).or_insert_with(|| {
-                                    file_reads_order.push(fp.to_string());
-                                    (0, 0)
-                                }).0 += 1;
+                                file_reads
+                                    .entry(fp.to_string())
+                                    .or_insert_with(|| {
+                                        file_reads_order.push(fp.to_string());
+                                        (0, 0)
+                                    })
+                                    .0 += 1;
                             }
                         }
                     }
@@ -617,8 +638,14 @@ async fn get_session_context(
         }
     }
     categories.sort_by(|a, b| {
-        let bt = b.get("estimated_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
-        let at = a.get("estimated_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+        let bt = b
+            .get("estimated_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        let at = a
+            .get("estimated_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
         bt.cmp(&at)
     });
 
@@ -634,8 +661,14 @@ async fn get_session_context(
         }));
     }
     file_consumptions.sort_by(|a, b| {
-        let bt = b.get("estimated_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
-        let at = a.get("estimated_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+        let bt = b
+            .get("estimated_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        let at = a
+            .get("estimated_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
         bt.cmp(&at)
     });
     file_consumptions.truncate(50);
@@ -655,8 +688,14 @@ async fn get_session_context(
         }));
     }
     tool_consumptions.sort_by(|a, b| {
-        let bt = b.get("total_result_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
-        let at = a.get("total_result_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+        let bt = b
+            .get("total_result_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        let at = a
+            .get("total_result_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
         let bc = b.get("call_count").and_then(|v| v.as_i64()).unwrap_or(0);
         let ac = a.get("call_count").and_then(|v| v.as_i64()).unwrap_or(0);
         bt.cmp(&at).then(bc.cmp(&ac))

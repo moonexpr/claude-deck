@@ -9,13 +9,12 @@
 /// Security: same-origin parity with /api/v1/ai (absent Origin allowed).
 /// Messages column: JSON array of { "role": "...", "content": "..." }.
 /// Streaming chat is NOT here — it lives at /api/v1/ai/chat (C1).
-
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
-    routing::{delete, get, post, put},
-    Json, Router,
+    routing::get,
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};

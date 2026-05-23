@@ -6,13 +6,12 @@
 ///   1. no_key_returns_503           — anthropic_api_key is None → 503
 ///   2. bad_upstream_returns_502     — wiremock returns 401     → 502
 ///   3. happy_path_streams_data_frames — valid SSE stream        → Vercel Data Stream frames
-
 use axum::body::Body;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 use wiremock::{
-    matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
 };
 
 // ---------------------------------------------------------------------------
@@ -20,8 +19,7 @@ use wiremock::{
 // ---------------------------------------------------------------------------
 
 fn make_tmp() -> std::path::PathBuf {
-    static COUNTER: std::sync::atomic::AtomicU32 =
-        std::sync::atomic::AtomicU32::new(0);
+    static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let tmp = std::env::temp_dir().join(format!(
         "claude_deck_ai_test_{}_{}_{n}",
@@ -209,11 +207,7 @@ async fn happy_path_streams_data_frames() {
         .await;
 
     let tmp = make_tmp();
-    let config = make_config_with_key(
-        &tmp,
-        mock_server.uri(),
-        Some("test-key".to_string()),
-    );
+    let config = make_config_with_key(&tmp, mock_server.uri(), Some("test-key".to_string()));
     let router = server_core::app(config)
         .await
         .expect("server_core::app failed");
@@ -231,7 +225,9 @@ async fn happy_path_streams_data_frames() {
     // Verify Vercel AI SDK response headers.
     let headers = resp.headers();
     assert_eq!(
-        headers.get("x-vercel-ai-data-stream").and_then(|v| v.to_str().ok()),
+        headers
+            .get("x-vercel-ai-data-stream")
+            .and_then(|v| v.to_str().ok()),
         Some("v1"),
         "x-vercel-ai-data-stream header must be v1"
     );

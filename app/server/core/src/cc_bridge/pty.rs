@@ -6,12 +6,11 @@
 ///   - `signal(sig)` — send a Unix signal by name ("INT" / "TERM" / "KILL")
 ///   - `wait_exit() -> i32` — block until child exits, return exit code
 ///   - `read_loop(sender)` — background task: read pty output → tokio channel
-
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 
-use portable_pty::{native_pty_system, CommandBuilder, PtyPair, PtySize};
+use portable_pty::{CommandBuilder, PtyPair, PtySize, native_pty_system};
 use tokio::sync::mpsc;
 
 // Re-export for use in mod.rs
@@ -39,7 +38,10 @@ impl PtySession {
         env: &HashMap<String, String>,
         cols: u16,
         rows: u16,
-    ) -> Result<(Self, Box<dyn portable_pty::Child + Send + Sync>), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<
+        (Self, Box<dyn portable_pty::Child + Send + Sync>),
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
         if cmd.is_empty() {
             return Err("cmd must not be empty".into());
         }
@@ -74,7 +76,11 @@ impl PtySession {
     }
 
     /// Resize the pty.
-    pub fn resize(&self, cols: u16, rows: u16) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub fn resize(
+        &self,
+        cols: u16,
+        rows: u16,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.pair.master.resize(PtySize {
             rows,
             cols,

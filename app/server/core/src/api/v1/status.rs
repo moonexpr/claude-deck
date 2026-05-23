@@ -1,12 +1,8 @@
-use axum::{
-    routing::get,
-    Router, Json,
-};
 use crate::api::v1::ApiState;
+use axum::{Json, Router, routing::get};
 
 pub fn router() -> Router<ApiState> {
-    Router::new()
-        .route("/", get(get_status))
+    Router::new().route("/", get(get_status))
 }
 
 async fn get_status() -> Json<serde_json::Value> {

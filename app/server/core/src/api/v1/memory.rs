@@ -6,12 +6,12 @@
 // against them). Paths via `crate::paths`, errors via `crate::error::AppError`.
 
 use axum::{
+    Router,
     extract::{Json, Query, State},
     routing::{delete, get, post, put},
-    Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -123,7 +123,9 @@ fn rglob_md(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(d) = stack.pop() {
-        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        let Ok(rd) = std::fs::read_dir(&d) else {
+            continue;
+        };
         for entry in rd.flatten() {
             let p = entry.path();
             if p.is_dir() {
@@ -248,13 +250,9 @@ fn parse_simple_yaml(src: &str) -> Option<Value> {
                 if !item_raw.starts_with([' ', '\t']) {
                     break;
                 }
-                let item = trimmed.strip_prefix("- ").or_else(|| {
-                    if trimmed == "-" {
-                        Some("")
-                    } else {
-                        None
-                    }
-                })?;
+                let item = trimmed
+                    .strip_prefix("- ")
+                    .or_else(|| if trimmed == "-" { Some("") } else { None })?;
                 seq.push(scalar_to_value(item.trim()));
                 i += 1;
             }
@@ -647,10 +645,7 @@ fn resolve_import_tree(
             if path.is_absolute() {
                 path_str.clone()
             } else {
-                cwd_fallback
-                    .join(&path)
-                    .to_string_lossy()
-                    .into_owned()
+                cwd_fallback.join(&path).to_string_lossy().into_owned()
             }
         });
 

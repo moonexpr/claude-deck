@@ -8,19 +8,21 @@
 //! built against them — do not "improve" paths).
 
 use axum::{
+    Router,
     extract::{Json, Query},
     routing::{get, post, put},
-    Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 
 use crate::api::v1::ApiState;
 use crate::error::{AppError, AppResult};
 use crate::fileio::read_json_file;
 use crate::paths;
-use crate::patterns::{migrate_deprecated_pattern, sanitize_permission_rules, validate_permission_pattern};
+use crate::patterns::{
+    migrate_deprecated_pattern, sanitize_permission_rules, validate_permission_pattern,
+};
 
 pub fn router() -> Router<ApiState> {
     // Paths mirror Python's `APIRouter(prefix="/config")` exactly.
@@ -65,7 +67,9 @@ fn rglob_md(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(d) = stack.pop() {
-        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        let Ok(rd) = std::fs::read_dir(&d) else {
+            continue;
+        };
         for entry in rd.flatten() {
             let p = entry.path();
             if p.is_dir() {
@@ -136,7 +140,13 @@ fn mask_sensitive(value: &Value) -> Value {
                         Value::Array(a) => {
                             let arr = a
                                 .iter()
-                                .map(|i| if i.is_object() { mask_sensitive(i) } else { i.clone() })
+                                .map(|i| {
+                                    if i.is_object() {
+                                        mask_sensitive(i)
+                                    } else {
+                                        i.clone()
+                                    }
+                                })
                                 .collect();
                             out.insert(k.clone(), Value::Array(arr));
                         }
@@ -200,7 +210,12 @@ async fn list_config_files(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<
 
     if let Some(pp) = q.project_path.as_deref() {
         let proj = PathBuf::from(pp);
-        for rel in [".claude/settings.json", ".claude/settings.local.json", ".mcp.json", "CLAUDE.md"] {
+        for rel in [
+            ".claude/settings.json",
+            ".claude/settings.local.json",
+            ".mcp.json",
+            "CLAUDE.md",
+        ] {
             let fp = proj.join(rel);
             files.push(json!({
                 "path": fp.to_string_lossy(), "scope": "project",
@@ -363,7 +378,11 @@ async fn get_merged_config(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<
                     .filter_map(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
                     .collect();
                 stems.sort();
-                agents.extend(stems.into_iter().map(|s| Value::String(format!("project:{}", s))));
+                agents.extend(
+                    stems
+                        .into_iter()
+                        .map(|s| Value::String(format!("project:{}", s))),
+                );
             }
         }
     }
@@ -384,7 +403,9 @@ async fn get_merged_config(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<
 async fn get_raw_file_content(Query(q): Query<RawQuery>) -> AppResult<Json<Value>> {
     let path = PathBuf::from(&q.path);
     if !path.exists() {
-        return Ok(Json(json!({ "path": q.path, "content": "", "exists": false })));
+        return Ok(Json(
+            json!({ "path": q.path, "content": "", "exists": false }),
+        ));
     }
     let content_str = if path.extension().and_then(|e| e.to_str()) == Some("json") {
         match read_json_file(&path) {
@@ -399,11 +420,13 @@ async fn get_raw_file_content(Query(q): Query<RawQuery>) -> AppResult<Json<Value
                     "path": q.path,
                     "content": format!("Error reading file: {}", e),
                     "exists": true,
-                })))
+                })));
             }
         }
     };
-    Ok(Json(json!({ "path": q.path, "content": content_str, "exists": true })))
+    Ok(Json(
+        json!({ "path": q.path, "content": content_str, "exists": true }),
+    ))
 }
 
 /// PUT /api/v1/config/settings
@@ -487,7 +510,9 @@ async fn validate_settings(Json(req): Json<SettingsValidationRequest>) -> AppRes
         }
     }
 
-    Ok(Json(json!({ "valid": issues.is_empty(), "issues": issues })))
+    Ok(Json(
+        json!({ "valid": issues.is_empty(), "issues": issues }),
+    ))
 }
 
 /// GET /api/v1/config/settings/{scope}
@@ -500,8 +525,12 @@ async fn get_settings_by_scope(
         "managed" => Some(paths::get_managed_settings_file()),
         "user" => Some(paths::get_claude_user_settings_file()),
         "user_local" => Some(paths::get_claude_user_settings_local_file()),
-        "project" => pp.map(|p| paths::get_project_settings_file(Some(p), std::path::Path::new(""))),
-        "local" => pp.map(|p| paths::get_project_settings_local_file(Some(p), std::path::Path::new(""))),
+        "project" => {
+            pp.map(|p| paths::get_project_settings_file(Some(p), std::path::Path::new("")))
+        }
+        "local" => {
+            pp.map(|p| paths::get_project_settings_local_file(Some(p), std::path::Path::new("")))
+        }
         _ => None,
     };
     let settings = match file_path {
@@ -521,28 +550,52 @@ fn read_scope(fp: &Path) -> Value {
 
 fn all_scoped(pp: Option<&str>) -> Map<String, Value> {
     let mut m = Map::new();
-    m.insert("managed".into(), read_scope(&paths::get_managed_settings_file()));
-    m.insert("user".into(), read_scope(&paths::get_claude_user_settings_file()));
+    m.insert(
+        "managed".into(),
+        read_scope(&paths::get_managed_settings_file()),
+    );
+    m.insert(
+        "user".into(),
+        read_scope(&paths::get_claude_user_settings_file()),
+    );
     m.insert(
         "project".into(),
-        pp.map(|p| read_scope(&paths::get_project_settings_file(Some(p), std::path::Path::new("")))).unwrap_or_else(|| json!({})),
+        pp.map(|p| {
+            read_scope(&paths::get_project_settings_file(
+                Some(p),
+                std::path::Path::new(""),
+            ))
+        })
+        .unwrap_or_else(|| json!({})),
     );
     m.insert(
         "local".into(),
-        pp.map(|p| read_scope(&paths::get_project_settings_local_file(Some(p), std::path::Path::new("")))).unwrap_or_else(|| json!({})),
+        pp.map(|p| {
+            read_scope(&paths::get_project_settings_local_file(
+                Some(p),
+                std::path::Path::new(""),
+            ))
+        })
+        .unwrap_or_else(|| json!({})),
     );
     m
 }
 
 /// GET /api/v1/config/scopes
 async fn get_all_scoped_settings(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<Value>> {
-    Ok(Json(json!({ "scopes": all_scoped(q.project_path.as_deref()) })))
+    Ok(Json(
+        json!({ "scopes": all_scoped(q.project_path.as_deref()) }),
+    ))
 }
 
 fn flatten_keys(v: &Value, parent: &str, out: &mut std::collections::BTreeSet<String>) {
     if let Value::Object(m) = v {
         for (k, val) in m {
-            let nk = if parent.is_empty() { k.clone() } else { format!("{}.{}", parent, k) };
+            let nk = if parent.is_empty() {
+                k.clone()
+            } else {
+                format!("{}.{}", parent, k)
+            };
             if val.is_object() {
                 flatten_keys(val, &nk, out);
             } else {
@@ -598,7 +651,8 @@ async fn get_resolved_config(Query(q): Query<ProjectPathQuery>) -> AppResult<Jso
     let managed = paths::get_managed_settings_file();
     let user = paths::get_claude_user_settings_file();
     let proj_p = pp.map(|p| paths::get_project_settings_file(Some(p), std::path::Path::new("")));
-    let local_p = pp.map(|p| paths::get_project_settings_local_file(Some(p), std::path::Path::new("")));
+    let local_p =
+        pp.map(|p| paths::get_project_settings_local_file(Some(p), std::path::Path::new("")));
 
     Ok(Json(json!({
         "resolved": resolved,

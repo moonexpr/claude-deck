@@ -1,8 +1,12 @@
 // PORTED: cli_executor.py + api/v1/cli.py
 
-use axum::{extract::{Json, State}, routing::post, Router};
+use axum::{
+    Router,
+    extract::{Json, State},
+    routing::post,
+};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -82,7 +86,7 @@ async fn execute_cli_command(
         None => {
             return Err(AppError::internal(
                 "Claude CLI binary not found in PATH. Please ensure Claude Code is installed.",
-            ))
+            ));
         }
     };
 
@@ -100,7 +104,7 @@ async fn execute_cli_command(
                 "stdout": "",
                 "stderr": format!("Failed to execute command: {}", e),
                 "exit_code": -1,
-            })))
+            })));
         }
     };
 

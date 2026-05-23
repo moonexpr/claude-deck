@@ -5,8 +5,7 @@
 ///   complete_messages — returns the full text and token usage synchronously
 ///
 /// Neither function reads environment variables. All config is passed in.
-
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use eventsource_stream::Eventsource;
 use futures::stream::{Stream, StreamExt};
 use reqwest::Client;
@@ -64,6 +63,7 @@ struct RawMessageDelta {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)] // mirrors the Anthropic message_start shape; usage parsing is deferred
 struct RawMessage {
     usage: Option<RawUsage>,
 }
@@ -72,11 +72,7 @@ struct RawMessage {
 // Request body builder
 // ---------------------------------------------------------------------------
 
-fn build_request_body(
-    model: &str,
-    messages: &[Message],
-    stream: bool,
-) -> serde_json::Value {
+fn build_request_body(model: &str, messages: &[Message], stream: bool) -> serde_json::Value {
     serde_json::json!({
         "model": model,
         "max_tokens": DEFAULT_MAX_TOKENS,
@@ -123,11 +119,7 @@ pub async fn stream_messages(
             .text()
             .await
             .unwrap_or_else(|_| "upstream error".to_string());
-        return Err(anyhow!(
-            "upstream_error|{}|{}",
-            code,
-            detail
-        ));
+        return Err(anyhow!("upstream_error|{}|{}", code, detail));
     }
 
     // Parse the byte stream as SSE events using eventsource-stream
@@ -183,9 +175,10 @@ fn parse_event(event_type: &str, data: &str) -> anyhow::Result<AnthropicEvent> {
         }
         "message_start" => {
             // Carries initial usage (e.g. input_tokens). Parse and stash for stop.
-            let raw: RawMessage =
-                serde_json::from_str(data).map(|r: serde_json::Value| RawMessage {
-                    usage: r.get("message")
+            let raw: RawMessage = serde_json::from_str(data)
+                .map(|r: serde_json::Value| RawMessage {
+                    usage: r
+                        .get("message")
                         .and_then(|m| m.get("usage"))
                         .and_then(|u| serde_json::from_value(u.clone()).ok())
                         .and_then(|u: RawUsage| {

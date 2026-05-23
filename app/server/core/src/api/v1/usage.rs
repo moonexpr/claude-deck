@@ -7,15 +7,15 @@
 // model-pricing lookup and 5-hour block detection mirror the Python exactly.
 
 use axum::{
+    Json, Router,
     extract::{Query, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
-    Json, Router,
 };
 use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, Timelike, Utc};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -234,7 +234,11 @@ fn get_model_pricing(model_name: &str) -> Option<&'static ModelPrice> {
     None
 }
 
-fn calculate_tiered_cost(total_tokens: i64, base_price: Option<f64>, tiered_price: Option<f64>) -> f64 {
+fn calculate_tiered_cost(
+    total_tokens: i64,
+    base_price: Option<f64>,
+    tiered_price: Option<f64>,
+) -> f64 {
     if total_tokens <= 0 {
         return 0.0;
     }
@@ -271,7 +275,8 @@ fn calculate_cost(
     };
 
     let input_cost = calculate_tiered_cost(input_tokens, pricing.input, pricing.input_above_200k);
-    let output_cost = calculate_tiered_cost(output_tokens, pricing.output, pricing.output_above_200k);
+    let output_cost =
+        calculate_tiered_cost(output_tokens, pricing.output, pricing.output_above_200k);
     let cache_creation_cost = calculate_tiered_cost(
         cache_creation_tokens,
         pricing.cache_creation,
@@ -591,7 +596,11 @@ fn fmt_ym(dt: &DateTime<FixedOffset>) -> String {
 // path.
 // ===========================================================================
 
-fn get_cache_key(cache_type: &str, project_path: Option<&str>, params: &[(&str, Option<String>)]) -> String {
+fn get_cache_key(
+    cache_type: &str,
+    project_path: Option<&str>,
+    params: &[(&str, Option<String>)],
+) -> String {
     let mut key_parts: Vec<String> = vec![cache_type.to_string()];
     if let Some(pp) = project_path {
         key_parts.push(format!("project:{}", pp));
@@ -735,7 +744,10 @@ fn compute_summary(project_path: Option<&str>) -> Value {
 fn aggregate_by_daily(entries: &[LoadedUsageEntry]) -> Vec<Value> {
     let mut groups: BTreeMap<String, Vec<LoadedUsageEntry>> = BTreeMap::new();
     for e in entries {
-        groups.entry(fmt_ymd(&e.timestamp)).or_default().push(e.clone());
+        groups
+            .entry(fmt_ymd(&e.timestamp))
+            .or_default()
+            .push(e.clone());
     }
 
     let mut out = Vec::new();
@@ -759,7 +771,10 @@ fn aggregate_by_daily(entries: &[LoadedUsageEntry]) -> Vec<Value> {
 fn aggregate_by_monthly(entries: &[LoadedUsageEntry]) -> Vec<Value> {
     let mut groups: BTreeMap<String, Vec<LoadedUsageEntry>> = BTreeMap::new();
     for e in entries {
-        groups.entry(fmt_ym(&e.timestamp)).or_default().push(e.clone());
+        groups
+            .entry(fmt_ym(&e.timestamp))
+            .or_default()
+            .push(e.clone());
     }
 
     let mut out = Vec::new();
@@ -876,8 +891,8 @@ fn create_block(
             let br_tokens = total_tokens as f64 / duration_minutes;
             let br_cost = (cost_usd / duration_minutes) * 60.0;
 
-            let remaining_ms = (end_time - now.with_timezone(end_time.offset()))
-                .num_milliseconds() as f64;
+            let remaining_ms =
+                (end_time - now.with_timezone(end_time.offset())).num_milliseconds() as f64;
             let rem_min = ((remaining_ms / (1000.0 * 60.0)) as i64).max(0);
 
             let projected_additional_tokens = br_tokens * rem_min as f64;
@@ -993,8 +1008,7 @@ fn identify_session_blocks(entries: &[LoadedUsageEntry]) -> Vec<Value> {
             current_block_entries = vec![entry.clone()];
         } else {
             let start = current_block_start.unwrap();
-            let time_since_start =
-                (entry_time - start).num_milliseconds() as f64;
+            let time_since_start = (entry_time - start).num_milliseconds() as f64;
             let last_entry = current_block_entries.last().cloned();
             let time_since_last = match &last_entry {
                 Some(le) => (entry_time - le.timestamp).num_milliseconds() as f64,
@@ -1043,7 +1057,10 @@ fn filter_recent_blocks(blocks: Vec<Value>) -> Vec<Value> {
     blocks
         .into_iter()
         .filter(|b| {
-            let is_active = b.get("is_active").and_then(|v| v.as_bool()).unwrap_or(false);
+            let is_active = b
+                .get("is_active")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             match block_start_dt(b) {
                 Some(dt) => dt.with_timezone(&Utc) >= cutoff || is_active,
                 None => is_active,
@@ -1060,12 +1077,20 @@ fn compute_blocks(project_path: Option<&str>, recent: bool, active: bool) -> Val
         blocks = filter_recent_blocks(blocks);
     }
     if active {
-        blocks.retain(|b| b.get("is_active").and_then(|v| v.as_bool()).unwrap_or(false));
+        blocks.retain(|b| {
+            b.get("is_active")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        });
     }
 
     let active_block = blocks
         .iter()
-        .find(|b| b.get("is_active").and_then(|v| v.as_bool()).unwrap_or(false))
+        .find(|b| {
+            b.get("is_active")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        })
         .cloned();
 
     let non_gap: Vec<&Value> = blocks
@@ -1167,7 +1192,11 @@ fn filter_monthly_range(
 // Top-level computation -> response shapes
 // ===========================================================================
 
-fn build_daily(project_path: Option<&str>, start_date: Option<&str>, end_date: Option<&str>) -> Value {
+fn build_daily(
+    project_path: Option<&str>,
+    start_date: Option<&str>,
+    end_date: Option<&str>,
+) -> Value {
     let entries = get_all_usage_entries(project_path);
     let entries = filter_daily_range(entries, start_date, end_date);
     let daily_data = aggregate_by_daily(&entries);
@@ -1177,8 +1206,14 @@ fn build_daily(project_path: Option<&str>, start_date: Option<&str>, end_date: O
     for d in &daily_data {
         i += d.get("input_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
         o += d.get("output_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
-        cc += d.get("cache_creation_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
-        cr += d.get("cache_read_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+        cc += d
+            .get("cache_creation_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        cr += d
+            .get("cache_read_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
         total_cost += d.get("total_cost").and_then(|v| v.as_f64()).unwrap_or(0.0);
     }
 
@@ -1203,8 +1238,14 @@ fn build_monthly(
     for m in &monthly_data {
         i += m.get("input_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
         o += m.get("output_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
-        cc += m.get("cache_creation_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
-        cr += m.get("cache_read_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+        cc += m
+            .get("cache_creation_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        cr += m
+            .get("cache_read_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
         total_cost += m.get("total_cost").and_then(|v| v.as_f64()).unwrap_or(0.0);
     }
 
@@ -1226,8 +1267,14 @@ fn build_sessions(project_path: Option<&str>, limit: usize) -> Value {
     for s in &session_data {
         i += s.get("input_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
         o += s.get("output_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
-        cc += s.get("cache_creation_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
-        cr += s.get("cache_read_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+        cc += s
+            .get("cache_creation_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        cr += s
+            .get("cache_read_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
         total_cost += s.get("total_cost").and_then(|v| v.as_f64()).unwrap_or(0.0);
     }
 
@@ -1358,7 +1405,11 @@ async fn get_usage_summary(
         .and_then(|v| v.as_i64())
         .unwrap_or(0)
         != 0
-        || summary.get("total_tokens").and_then(|v| v.as_i64()).unwrap_or(0) != 0
+        || summary
+            .get("total_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0)
+            != 0
     {
         save_to_cache(&state.pool, &cache_key, "summary", &summary, pp).await;
     }
@@ -1386,10 +1437,7 @@ async fn get_daily_usage(
     let cache_key = get_cache_key(
         "daily",
         pp,
-        &[
-            ("start", q.start_date.clone()),
-            ("end", q.end_date.clone()),
-        ],
+        &[("start", q.start_date.clone()), ("end", q.end_date.clone())],
     );
 
     if let Some(cached) = get_from_cache(&state.pool, &cache_key).await {
@@ -1483,7 +1531,11 @@ async fn get_block_usage(
 
 /// Mirror Python `str(True)` / `str(False)` used in cache-key construction.
 fn py_bool(b: bool) -> String {
-    if b { "True".to_string() } else { "False".to_string() }
+    if b {
+        "True".to_string()
+    } else {
+        "False".to_string()
+    }
 }
 
 const EXPORT_DATASETS: [&str; 5] = ["summary", "daily", "sessions", "monthly", "blocks"];
@@ -1531,11 +1583,8 @@ fn flatten_for_csv(rows: &[Value]) -> (Vec<String>, Vec<serde_json::Map<String, 
                         if a.first().map(|x| x.is_object()).unwrap_or(false) {
                             Value::String(serde_json::to_string(a).unwrap_or_default())
                         } else {
-                            let joined = a
-                                .iter()
-                                .map(scalar_to_py_str)
-                                .collect::<Vec<_>>()
-                                .join("|");
+                            let joined =
+                                a.iter().map(scalar_to_py_str).collect::<Vec<_>>().join("|");
                             Value::String(joined)
                         }
                     }
@@ -1666,6 +1715,13 @@ async fn invalidate_cache(
     State(state): State<ApiState>,
     Query(q): Query<InvalidateQuery>,
 ) -> AppResult<Json<Value>> {
-    invalidate_cache_db(&state.pool, q.cache_type.as_deref(), q.project_path.as_deref()).await;
-    Ok(Json(json!({ "status": "ok", "message": "Cache invalidated" })))
+    invalidate_cache_db(
+        &state.pool,
+        q.cache_type.as_deref(),
+        q.project_path.as_deref(),
+    )
+    .await;
+    Ok(Json(
+        json!({ "status": "ok", "message": "Cache invalidated" }),
+    ))
 }

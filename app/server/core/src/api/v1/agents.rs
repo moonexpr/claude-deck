@@ -14,14 +14,14 @@
 // `yaml.YAMLError` fallback. If full fidelity is required, add `serde_yaml`.
 
 use axum::{
+    Router,
     extract::{Json, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
-    Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -40,8 +40,14 @@ pub fn router() -> Router<ApiState> {
         .route("/skills/registry", get(browse_registry_skills))
         .route("/skills/registry/install", post(install_registry_skill))
         .route("/skills/{location}/{name}", get(get_skill))
-        .route("/skills/{location}/{name}/dependencies", get(check_skill_dependencies))
-        .route("/skills/{location}/{name}/install", post(install_skill_dependencies))
+        .route(
+            "/skills/{location}/{name}/dependencies",
+            get(check_skill_dependencies),
+        )
+        .route(
+            "/skills/{location}/{name}/install",
+            post(install_skill_dependencies),
+        )
         .route("/skills/{location}/{name}/files", get(list_skill_files))
         .route(
             "/{scope}/{name}",
@@ -113,11 +119,7 @@ mod yaml_min {
             if !(trimmed.starts_with("- ") || trimmed == "-") {
                 break;
             }
-            let rest = if trimmed == "-" {
-                ""
-            } else {
-                &trimmed[2..]
-            };
+            let rest = if trimmed == "-" { "" } else { &trimmed[2..] };
             *idx += 1;
             if rest.trim().is_empty() {
                 // Nested block belonging to this list item.
@@ -496,7 +498,9 @@ fn build_frontmatter(metadata: &Map<String, Value>) -> String {
 // ============================================================================
 
 fn mget<'a>(m: &'a Value, key: &str) -> Option<&'a Value> {
-    m.as_object().and_then(|o| o.get(key)).filter(|v| !v.is_null())
+    m.as_object()
+        .and_then(|o| o.get(key))
+        .filter(|v| !v.is_null())
 }
 
 /// Python `metadata.get(a) or metadata.get(b)` — falsy (null/"") falls through.
@@ -510,7 +514,8 @@ fn truthy<'a>(v: Option<&'a Value>) -> Option<&'a Value> {
 }
 
 fn or2<'a>(m: &'a Value, a: &str, b: &str) -> Option<&'a Value> {
-    truthy(m.as_object().and_then(|o| o.get(a))).or_else(|| truthy(m.as_object().and_then(|o| o.get(b))))
+    truthy(m.as_object().and_then(|o| o.get(a)))
+        .or_else(|| truthy(m.as_object().and_then(|o| o.get(b))))
 }
 
 /// AgentService._parse_list_field: list stays, comma-string splits, else None.
@@ -628,8 +633,7 @@ fn get_installed_plugins() -> Vec<Value> {
         for (plugin_name, installs) in map {
             if let Some(arr) = installs.as_array() {
                 for install in arr {
-                    if let Some(install_path) =
-                        install.get("installPath").and_then(|v| v.as_str())
+                    if let Some(install_path) = install.get("installPath").and_then(|v| v.as_str())
                     {
                         if Path::new(install_path).exists() {
                             plugins.push(json!({
@@ -652,8 +656,7 @@ fn get_installed_plugins() -> Vec<Value> {
 
 fn build_agent(name: &str, scope: &str, metadata: &Value, prompt: &str) -> Value {
     let tools = parse_list_field(mget(metadata, "tools"));
-    let disallowed_tools =
-        parse_list_field(or2(metadata, "disallowed-tools", "disallowed_tools"));
+    let disallowed_tools = parse_list_field(or2(metadata, "disallowed-tools", "disallowed_tools"));
     let skills = parse_list_field(mget(metadata, "skills"));
     let hooks = parse_hooks(mget(metadata, "hooks"));
     let permission_mode = or2(metadata, "permission-mode", "permission_mode")
@@ -699,7 +702,12 @@ fn scan_agents_dir(base_dir: &Path, scope: &str) -> Vec<Value> {
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
-        agents.push(build_agent(&agent_name, scope, &metadata, &markdown_content));
+        agents.push(build_agent(
+            &agent_name,
+            scope,
+            &metadata,
+            &markdown_content,
+        ));
     }
     agents
 }
@@ -739,7 +747,12 @@ fn agent_base_dir(scope: &str, project_path: Option<&str>, cwd_fallback: &Path) 
     }
 }
 
-fn service_get_agent(scope: &str, name: &str, project_path: Option<&str>, cwd_fallback: &Path) -> Option<Value> {
+fn service_get_agent(
+    scope: &str,
+    name: &str,
+    project_path: Option<&str>,
+    cwd_fallback: &Path,
+) -> Option<Value> {
     let base_dir = agent_base_dir(scope, project_path, cwd_fallback);
     let file_path = base_dir.join(format!("{}.md", name));
     if !file_path.exists() {
@@ -958,9 +971,7 @@ fn service_list_skills(project_path: Option<&str>) -> Vec<Value> {
             let location = format!("plugin:{}", plugin["name"].as_str().unwrap_or(""));
             let mut plugin_skills = scan_plugin_skills_dir(&skills_dir, &location);
             if !command_names.is_empty() {
-                plugin_skills.retain(|s| {
-                    !command_names.contains(s["name"].as_str().unwrap_or(""))
-                });
+                plugin_skills.retain(|s| !command_names.contains(s["name"].as_str().unwrap_or("")));
             }
             skills.extend(plugin_skills);
         }
@@ -1016,7 +1027,12 @@ fn service_get_skill(name: &str, location: &str, project_path: Option<&str>) -> 
     }
     let content = std::fs::read_to_string(&skill_file).ok()?;
     let (metadata, markdown_content) = parse_frontmatter(&content);
-    Some(make_skill(name, &metadata, location, Some(&markdown_content)))
+    Some(make_skill(
+        name,
+        &metadata,
+        location,
+        Some(&markdown_content),
+    ))
 }
 
 // ============================================================================
@@ -1049,11 +1065,7 @@ fn resolve_skill_dir(base: &Path, name: &str) -> Option<PathBuf> {
     None
 }
 
-fn dep_get_skill_dir(
-    name: &str,
-    location: &str,
-    project_path: Option<&str>,
-) -> Option<PathBuf> {
+fn dep_get_skill_dir(name: &str, location: &str, project_path: Option<&str>) -> Option<PathBuf> {
     if location == "user" {
         let base = paths::get_claude_user_skills_dir();
         if let Some(r) = resolve_skill_dir(&base, name) {
@@ -1097,11 +1109,7 @@ fn dep_get_skill_dir(
     }
 }
 
-fn dep_get_skill_file(
-    name: &str,
-    location: &str,
-    project_path: Option<&str>,
-) -> Option<PathBuf> {
+fn dep_get_skill_file(name: &str, location: &str, project_path: Option<&str>) -> Option<PathBuf> {
     if let Some(skill_dir) = dep_get_skill_dir(name, location, project_path) {
         let skill_file = skill_dir.join("SKILL.md");
         if skill_file.exists() {
@@ -1143,7 +1151,12 @@ fn which(name: &str, enable_external_tools: bool) -> Option<PathBuf> {
     None
 }
 
-fn run_cmd(cmd: &str, args: &[&str], timeout_secs: u64, cwd: Option<&Path>) -> Option<std::process::Output> {
+fn run_cmd(
+    cmd: &str,
+    args: &[&str],
+    timeout_secs: u64,
+    cwd: Option<&Path>,
+) -> Option<std::process::Output> {
     use std::process::{Command, Stdio};
     let mut c = Command::new(cmd);
     c.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -1196,7 +1209,10 @@ fn check_npm_package(name: &str) -> (bool, Option<String>) {
                     if let Some(entry) = deps.get(name) {
                         return (
                             true,
-                            entry.get("version").and_then(|v| v.as_str()).map(String::from),
+                            entry
+                                .get("version")
+                                .and_then(|v| v.as_str())
+                                .map(String::from),
                         );
                     }
                 }
@@ -1244,7 +1260,12 @@ fn dep_obj(kind: &str, name: &str, installed: bool, installed_version: Option<St
     })
 }
 
-fn check_dependencies(name: &str, location: &str, project_path: Option<&str>, enable_external_tools: bool) -> Value {
+fn check_dependencies(
+    name: &str,
+    location: &str,
+    project_path: Option<&str>,
+    enable_external_tools: bool,
+) -> Value {
     let mut dependencies: Vec<Value> = Vec::new();
     let mut has_install_script = false;
     let mut install_script_path: Value = Value::Null;
@@ -1316,7 +1337,10 @@ fn check_dependencies(name: &str, location: &str, project_path: Option<&str>, en
                 if !install_def.is_object() {
                     continue;
                 }
-                let kind = install_def.get("kind").and_then(|v| v.as_str()).unwrap_or("");
+                let kind = install_def
+                    .get("kind")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 let pkg = install_def
                     .get("package")
                     .and_then(|v| v.as_str())
@@ -1325,10 +1349,7 @@ fn check_dependencies(name: &str, location: &str, project_path: Option<&str>, en
                 if pkg.is_empty() {
                     continue;
                 }
-                if dependencies
-                    .iter()
-                    .any(|d| d["name"].as_str() == Some(pkg))
-                {
+                if dependencies.iter().any(|d| d["name"].as_str() == Some(pkg)) {
                     continue;
                 }
                 if kind == "npm" {
@@ -1349,7 +1370,8 @@ fn check_dependencies(name: &str, location: &str, project_path: Option<&str>, en
                                 .iter()
                                 .any(|d| d["name"].as_str() == Some(bin_name))
                             {
-                                let (installed, version) = check_binary(bin_name, enable_external_tools);
+                                let (installed, version) =
+                                    check_binary(bin_name, enable_external_tools);
                                 dependencies.push(dep_obj("bin", bin_name, installed, version));
                             }
                         }
@@ -1451,7 +1473,12 @@ fn list_supporting_files(name: &str, location: &str, project_path: Option<&str>)
     files
 }
 
-fn install_dependencies(name: &str, location: &str, project_path: Option<&str>, enable_external_tools: bool) -> Value {
+fn install_dependencies(
+    name: &str,
+    location: &str,
+    project_path: Option<&str>,
+    enable_external_tools: bool,
+) -> Value {
     let status = check_dependencies(name, location, project_path, enable_external_tools);
 
     if status["all_satisfied"].as_bool().unwrap_or(false) {
@@ -1468,7 +1495,10 @@ fn install_dependencies(name: &str, location: &str, project_path: Option<&str>, 
     let mut failed: Vec<String> = Vec::new();
     let mut all_logs: Vec<String> = Vec::new();
     let skill_dir = dep_get_skill_dir(name, location, project_path);
-    let deps = status["dependencies"].as_array().cloned().unwrap_or_default();
+    let deps = status["dependencies"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
 
     if status["has_install_script"].as_bool().unwrap_or(false) {
         if let Some(sp) = status["install_script_path"].as_str() {
@@ -1480,10 +1510,8 @@ fn install_dependencies(name: &str, location: &str, project_path: Option<&str>, 
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                let _ = std::fs::set_permissions(
-                    &script_path,
-                    std::fs::Permissions::from_mode(0o755),
-                );
+                let _ =
+                    std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755));
             }
             match run_cmd(
                 "bash",
@@ -1520,9 +1548,7 @@ fn install_dependencies(name: &str, location: &str, project_path: Option<&str>, 
     }
 
     for dep in &deps {
-        if dep["installed"].as_bool().unwrap_or(false)
-            || dep["kind"].as_str() != Some("npm")
-        {
+        if dep["installed"].as_bool().unwrap_or(false) || dep["kind"].as_str() != Some("npm") {
             continue;
         }
         let dname = dep["name"].as_str().unwrap_or("");
@@ -1548,13 +1574,15 @@ fn install_dependencies(name: &str, location: &str, project_path: Option<&str>, 
     }
 
     for dep in &deps {
-        if dep["installed"].as_bool().unwrap_or(false)
-            || dep["kind"].as_str() != Some("pip")
-        {
+        if dep["installed"].as_bool().unwrap_or(false) || dep["kind"].as_str() != Some("pip") {
             continue;
         }
         let dname = dep["name"].as_str().unwrap_or("");
-        let pip_cmd = if which("pip3", enable_external_tools).is_some() { "pip3" } else { "pip" };
+        let pip_cmd = if which("pip3", enable_external_tools).is_some() {
+            "pip3"
+        } else {
+            "pip"
+        };
         all_logs.push(format!("\n=== {} install {} ===", pip_cmd, dname));
         match run_cmd(pip_cmd, &["install", dname], 60, None) {
             Some(out) => {
@@ -1577,9 +1605,7 @@ fn install_dependencies(name: &str, location: &str, project_path: Option<&str>, 
     }
 
     for dep in &deps {
-        if dep["installed"].as_bool().unwrap_or(false)
-            || dep["kind"].as_str() != Some("bin")
-        {
+        if dep["installed"].as_bool().unwrap_or(false) || dep["kind"].as_str() != Some("bin") {
             continue;
         }
         let dname = dep["name"].as_str().unwrap_or("");
@@ -1771,12 +1797,7 @@ async fn search_skills(query: &str, limit: i64) -> Vec<Value> {
                 })
                 .collect()
         };
-        let url = format!(
-            "{}?q={}&limit={}",
-            SKILLS_SH_SEARCH_API,
-            enc(query),
-            limit
-        );
+        let url = format!("{}?q={}&limit={}", SKILLS_SH_SEARCH_API, enc(query), limit);
         let resp = client.get(&url).send().await.ok()?;
         if !resp.status().is_success() {
             return None;
@@ -1832,22 +1853,26 @@ fn get_installed_skill_names(project_path: Option<&str>) -> std::collections::Ha
 fn clean_terminal_output(text: &str) -> String {
     use regex::Regex;
     let mut t = text.to_string();
-    let subs: &[(&str, &str)] = &[
-        (r"\x1b\[[0-9;?]*[A-Za-z]", ""),
-        (r"\x1b\][^\x07]*\x07", ""),
-    ];
+    let subs: &[(&str, &str)] = &[(r"\x1b\[[0-9;?]*[A-Za-z]", ""), (r"\x1b\][^\x07]*\x07", "")];
     for (pat, rep) in subs {
         if let Ok(re) = Regex::new(pat) {
             t = re.replace_all(&t, *rep).into_owned();
         }
     }
     t = t.replace('\u{1b}', "");
-    for pat in [r"\[\?25[hl]", r"\[\d+D", r"\[J", r"\[\d+(?:;\d+)*m", r"\[0m"] {
+    for pat in [
+        r"\[\?25[hl]",
+        r"\[\d+D",
+        r"\[J",
+        r"\[\d+(?:;\d+)*m",
+        r"\[0m",
+    ] {
         if let Ok(re) = Regex::new(pat) {
             t = re.replace_all(&t, "").into_owned();
         }
     }
-    if let Ok(re) = Regex::new(r"(?m)[█╗╔═║╚╝╟╠╣╬╩╦╨╤╥╙╘╒╓╫╪┘┐┌└├┤┬┴┼]+.*\n?") {
+    if let Ok(re) = Regex::new(r"(?m)[█╗╔═║╚╝╟╠╣╬╩╦╨╤╥╙╘╒╓╫╪┘┐┌└├┤┬┴┼]+.*\n?")
+    {
         t = re.replace_all(&t, "").into_owned();
     }
 
@@ -2124,8 +2149,8 @@ async fn get_skill(
     axum::extract::Path((location, name)): axum::extract::Path<(String, String)>,
     Query(q): Query<SkillDetailQuery>,
 ) -> AppResult<Json<Value>> {
-    let mut skill = service_get_skill(&name, &location, q.project_path.as_deref())
-        .ok_or_else(|| {
+    let mut skill =
+        service_get_skill(&name, &location, q.project_path.as_deref()).ok_or_else(|| {
             AppError::not_found(format!(
                 "Skill '{}' not found in location '{}'",
                 name, location
@@ -2133,8 +2158,12 @@ async fn get_skill(
         })?;
 
     if q.include_deps {
-        skill["dependency_status"] =
-            check_dependencies(&name, &location, q.project_path.as_deref(), state.enable_external_tools);
+        skill["dependency_status"] = check_dependencies(
+            &name,
+            &location,
+            q.project_path.as_deref(),
+            state.enable_external_tools,
+        );
         skill["supporting_files"] = Value::Array(list_supporting_files(
             &name,
             &location,
@@ -2207,9 +2236,7 @@ async fn list_skill_files(
 }
 
 /// GET /api/v1/agents/skills/registry
-async fn browse_registry_skills(
-    Query(q): Query<RegistryBrowseQuery>,
-) -> AppResult<Json<Value>> {
+async fn browse_registry_skills(Query(q): Query<RegistryBrowseQuery>) -> AppResult<Json<Value>> {
     let limit = q.limit.clamp(1, 100);
     let installed_names = get_installed_skill_names(q.project_path.as_deref());
 
@@ -2262,10 +2289,13 @@ async fn get_agent(
     if scope != "user" && scope != "project" {
         return Err(AppError::bad_request("Scope must be 'user' or 'project'"));
     }
-    let agent = service_get_agent(&scope, &name, q.project_path.as_deref(), &state.cwd_fallback)
-        .ok_or_else(|| {
-            AppError::not_found(format!("Agent '{}' not found in {} scope", name, scope))
-        })?;
+    let agent = service_get_agent(
+        &scope,
+        &name,
+        q.project_path.as_deref(),
+        &state.cwd_fallback,
+    )
+    .ok_or_else(|| AppError::not_found(format!("Agent '{}' not found in {} scope", name, scope)))?;
     Ok(Json(agent))
 }
 

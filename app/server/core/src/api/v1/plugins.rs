@@ -12,14 +12,14 @@
 // `CLIExecutor`.
 
 use axum::{
+    Router,
     extract::{Json, Path as AxumPath, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{delete, get, post, put},
-    Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 
 use crate::api::v1::ApiState;
@@ -113,8 +113,7 @@ struct PluginValidateRequest {
 
 /// Returns `(description, usage, examples)` for a known official plugin, or
 /// `None`. Mirrors `OFFICIAL_PLUGIN_DESCRIPTIONS` / `get_plugin_info`.
-fn get_plugin_info(name: &str) -> Option<(&'static str, &'static str, &'static [&'static str])>
-{
+fn get_plugin_info(name: &str) -> Option<(&'static str, &'static str, &'static [&'static str])> {
     let info: &[(&str, &str, &str, &[&str])] = &[
         (
             "document-skills",
@@ -448,11 +447,7 @@ fn parse_plugin_hooks(plugin_dir: &Path) -> Option<Vec<Value>> {
         _ => {}
     }
 
-    if hooks.is_empty() {
-        None
-    } else {
-        Some(hooks)
-    }
+    if hooks.is_empty() { None } else { Some(hooks) }
 }
 
 fn lsp_entry(server: &Value) -> Value {
@@ -614,8 +609,7 @@ fn get_enabled_plugins_from_settings() -> Vec<Value> {
                         for entry in rd.flatten() {
                             let p = entry.path();
                             let is_dir = p.is_dir();
-                            if is_dir || p.extension().and_then(|x| x.to_str()) == Some("md")
-                            {
+                            if is_dir || p.extension().and_then(|x| x.to_str()) == Some("md") {
                                 skill_count += 1;
                                 let n = if is_dir {
                                     p.file_name()
@@ -807,10 +801,17 @@ fn scan_plugins_directory(plugins_dir: &Path, scope: &str) -> Vec<Value> {
 }
 
 /// `list_installed_plugins`.
-fn list_installed_plugins(project_path: Option<&str>, cwd_fallback: &std::path::Path) -> Vec<Value> {
+fn list_installed_plugins(
+    project_path: Option<&str>,
+    cwd_fallback: &std::path::Path,
+) -> Vec<Value> {
     let mut plugins: Vec<Value> = get_enabled_plugins_from_settings();
 
-    let name_of = |p: &Value| p.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let name_of = |p: &Value| {
+        p.get("name")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    };
 
     let user_plugins_dir = paths::get_claude_user_plugins_dir();
     if user_plugins_dir.exists() {
@@ -983,7 +984,12 @@ fn find_claude_binary(enable_external_tools: bool) -> Option<PathBuf> {
 /// Port of `CLIExecutor.execute` for the `plugin` subcommand. `extra_env` is
 /// applied on top of the inherited environment (used by install for the
 /// HTTPS-instead-of-SSH git config).
-async fn cli_execute(args: &[&str], timeout_secs: u64, extra_env: &[(&str, &str)], enable_external_tools: bool) -> CliResult {
+async fn cli_execute(
+    args: &[&str],
+    timeout_secs: u64,
+    extra_env: &[(&str, &str)],
+    enable_external_tools: bool,
+) -> CliResult {
     let Some(binary) = find_claude_binary(enable_external_tools) else {
         return CliResult {
             stdout: String::new(),
@@ -1010,7 +1016,7 @@ async fn cli_execute(args: &[&str], timeout_secs: u64, extra_env: &[(&str, &str)
                 stdout: String::new(),
                 stderr: format!("Failed to execute command: {}", e),
                 exit_code: -1,
-            }
+            };
         }
     };
 
@@ -1141,7 +1147,9 @@ impl OrderedMap {
         self.vals.insert(k, v);
     }
     fn iter(&self) -> impl Iterator<Item = (&String, &Value)> {
-        self.keys.iter().map(move |k| (k, self.vals.get(k).unwrap()))
+        self.keys
+            .iter()
+            .map(move |k| (k, self.vals.get(k).unwrap()))
     }
 }
 
@@ -1204,7 +1212,9 @@ async fn list_plugins(
 
 /// GET /api/v1/plugins/marketplaces
 async fn list_marketplaces() -> AppResult<Json<Value>> {
-    Ok(Json(json!({ "marketplaces": list_marketplaces_from_files() })))
+    Ok(Json(
+        json!({ "marketplaces": list_marketplaces_from_files() }),
+    ))
 }
 
 /// POST /api/v1/plugins/marketplaces  (201)
@@ -1218,7 +1228,13 @@ async fn add_marketplace(
         _ => return Err(AppError::bad_request("Marketplace input is required")),
     };
 
-    let result = cli_execute(&["marketplace", "add", input], 120, &[], state.enable_external_tools).await;
+    let result = cli_execute(
+        &["marketplace", "add", input],
+        120,
+        &[],
+        state.enable_external_tools,
+    )
+    .await;
     let success = result.exit_code == 0;
     let message = if success {
         result.stdout.clone()
@@ -1244,7 +1260,13 @@ async fn remove_marketplace(
     State(state): State<ApiState>,
     AxumPath(name): AxumPath<String>,
 ) -> AppResult<Json<Value>> {
-    let result = cli_execute(&["marketplace", "remove", &name], 60, &[], state.enable_external_tools).await;
+    let result = cli_execute(
+        &["marketplace", "remove", &name],
+        60,
+        &[],
+        state.enable_external_tools,
+    )
+    .await;
     let success = result.exit_code == 0;
     let message = if success {
         result.stdout.clone()
@@ -1264,7 +1286,9 @@ async fn remove_marketplace(
 
 /// GET /api/v1/plugins/marketplace/{name}/browse
 async fn browse_marketplace(AxumPath(name): AxumPath<String>) -> AppResult<Json<Value>> {
-    Ok(Json(json!({ "plugins": browse_marketplace_from_files(&name) })))
+    Ok(Json(
+        json!({ "plugins": browse_marketplace_from_files(&name) }),
+    ))
 }
 
 /// GET /api/v1/plugins/marketplace/{marketplace_name}/plugin/{plugin_name}
@@ -1272,7 +1296,9 @@ async fn get_marketplace_plugin_details(
     AxumPath((marketplace_name, plugin_name)): AxumPath<(String, String)>,
 ) -> AppResult<Json<Value>> {
     let marketplace_dir = paths::get_marketplaces_dir().join(&marketplace_name);
-    let marketplace_json = marketplace_dir.join(".claude-plugin").join("marketplace.json");
+    let marketplace_json = marketplace_dir
+        .join(".claude-plugin")
+        .join("marketplace.json");
     let marketplace_data = read_json_file(&marketplace_json).unwrap_or_else(|| json!({}));
     let plugins = marketplace_data
         .get("plugins")
@@ -1389,18 +1415,36 @@ async fn get_marketplace_plugin_details(
         }
     }
 
-    let has_mcp = plugin_info.get("mcpServers").map(is_truthy).unwrap_or(false)
-        || plugin_json_data.get("mcpServers").map(is_truthy).unwrap_or(false);
-    let has_lsp = plugin_info.get("lspServers").map(is_truthy).unwrap_or(false)
-        || plugin_json_data.get("lspServers").map(is_truthy).unwrap_or(false);
+    let has_mcp = plugin_info
+        .get("mcpServers")
+        .map(is_truthy)
+        .unwrap_or(false)
+        || plugin_json_data
+            .get("mcpServers")
+            .map(is_truthy)
+            .unwrap_or(false);
+    let has_lsp = plugin_info
+        .get("lspServers")
+        .map(is_truthy)
+        .unwrap_or(false)
+        || plugin_json_data
+            .get("lspServers")
+            .map(is_truthy)
+            .unwrap_or(false);
 
     let version = match plugin_info.get("version") {
         Some(v) if is_truthy(v) => v.clone(),
-        _ => plugin_json_data.get("version").cloned().unwrap_or(Value::Null),
+        _ => plugin_json_data
+            .get("version")
+            .cloned()
+            .unwrap_or(Value::Null),
     };
     let author = match plugin_info.get("author") {
         Some(v) if is_truthy(v) => v.clone(),
-        _ => plugin_json_data.get("author").cloned().unwrap_or(Value::Null),
+        _ => plugin_json_data
+            .get("author")
+            .cloned()
+            .unwrap_or(Value::Null),
     };
 
     Ok(Json(json!({
@@ -1423,7 +1467,13 @@ async fn update_marketplace(
     State(state): State<ApiState>,
     AxumPath(name): AxumPath<String>,
 ) -> AppResult<Json<Value>> {
-    let result = cli_execute(&["marketplace", "update", &name], 120, &[], state.enable_external_tools).await;
+    let result = cli_execute(
+        &["marketplace", "update", &name],
+        120,
+        &[],
+        state.enable_external_tools,
+    )
+    .await;
     let success = result.exit_code == 0;
     let message = if success {
         result.stdout.clone()
@@ -1520,8 +1570,7 @@ async fn validate_plugin(Json(req): Json<PluginValidateRequest>) -> AppResult<Js
                         .map(is_truthy)
                         .unwrap_or(false)
                     {
-                        warnings
-                            .push("Missing 'description' field in plugin.json".to_string());
+                        warnings.push("Missing 'description' field in plugin.json".to_string());
                     }
                     if !plugin_data.get("version").map(is_truthy).unwrap_or(false) {
                         warnings.push("Missing 'version' field in plugin.json".to_string());
@@ -1617,7 +1666,13 @@ async fn install_plugin(
         ("GIT_CONFIG_KEY_0", "url.https://github.com/.insteadOf"),
         ("GIT_CONFIG_VALUE_0", "git@github.com:"),
     ];
-    let result = cli_execute(&["install", &req.name], 120, &extra_env, state.enable_external_tools).await;
+    let result = cli_execute(
+        &["install", &req.name],
+        120,
+        &extra_env,
+        state.enable_external_tools,
+    )
+    .await;
     let success = result.exit_code == 0;
 
     let (message, enhanced_stderr) = if success {
@@ -1762,8 +1817,7 @@ async fn get_plugin(
         }
     }
 
-    let mut b =
-        PluginBuilder::new(get_str(&plugin_data, "name").unwrap_or_else(|| name.clone()));
+    let mut b = PluginBuilder::new(get_str(&plugin_data, "name").unwrap_or_else(|| name.clone()));
     b.version = str_opt(&plugin_data, "version");
     b.description = str_opt(&plugin_data, "description");
     b.author = str_opt(&plugin_data, "author");
@@ -1813,9 +1867,7 @@ async fn uninstall_plugin(
                         }
                     }
 
-                    if let Some(pmap) =
-                        data.get_mut("plugins").and_then(|v| v.as_object_mut())
-                    {
+                    if let Some(pmap) = data.get_mut("plugins").and_then(|v| v.as_object_mut()) {
                         pmap.remove(mk);
                     }
                     if let Ok(serialized) = serde_json::to_string_pretty(&data) {

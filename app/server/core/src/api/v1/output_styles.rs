@@ -1,14 +1,14 @@
 // PORTED: output_style_service.py + api/v1/output_styles.py
 
 use axum::{
+    Router,
     extract::{Json, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
-    Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::PathBuf;
 
 use crate::api::v1::ApiState;
@@ -199,10 +199,12 @@ fn unescape_double(s: &str) -> String {
 }
 
 fn meta_get_str(meta: &[(String, Meta)], key: &str) -> Option<String> {
-    meta.iter().find(|(k, _)| k == key).and_then(|(_, v)| match v {
-        Meta::Str(s) => Some(s.clone()),
-        Meta::Bool(b) => Some(b.to_string()),
-    })
+    meta.iter()
+        .find(|(k, _)| k == key)
+        .and_then(|(_, v)| match v {
+            Meta::Str(s) => Some(s.clone()),
+            Meta::Bool(b) => Some(b.to_string()),
+        })
 }
 
 fn meta_get_bool(meta: &[(String, Meta)], key: &str) -> bool {
@@ -297,7 +299,11 @@ fn is_date_like(s: &str) -> bool {
         && b[8..10].iter().all(|c| c.is_ascii_digit())
 }
 
-fn base_dir_for(scope: &str, project_path: Option<&str>, cwd_fallback: &std::path::Path) -> PathBuf {
+fn base_dir_for(
+    scope: &str,
+    project_path: Option<&str>,
+    cwd_fallback: &std::path::Path,
+) -> PathBuf {
     if scope == "user" {
         paths::get_claude_user_output_styles_dir()
     } else {
@@ -305,7 +311,13 @@ fn base_dir_for(scope: &str, project_path: Option<&str>, cwd_fallback: &std::pat
     }
 }
 
-fn style_json(name: &str, scope: &str, description: Option<&str>, kci: bool, content: &str) -> Value {
+fn style_json(
+    name: &str,
+    scope: &str,
+    description: Option<&str>,
+    kci: bool,
+    content: &str,
+) -> Value {
     json!({
         "name": name,
         "scope": scope,

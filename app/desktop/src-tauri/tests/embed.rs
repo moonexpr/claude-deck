@@ -63,7 +63,10 @@ async fn embedded_server_answers_health_and_status() {
     let body: serde_json::Value =
         serde_json::from_slice(&body_bytes).expect("GET /health body is not valid JSON");
 
-    assert_eq!(body["status"], "running", "/health status field should be 'running'");
+    assert_eq!(
+        body["status"], "running",
+        "/health status field should be 'running'"
+    );
     assert!(
         body.get("name").is_some(),
         "/health response should have 'name' field"

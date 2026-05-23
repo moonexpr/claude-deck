@@ -25,7 +25,10 @@ pub fn validate_permission_pattern(pattern: &str) -> (bool, Option<String>) {
         return (false, Some("Pattern must not be empty".to_string()));
     }
     if pattern.contains('\n') || pattern.contains('\r') {
-        return (false, Some("Pattern must not contain newline characters".to_string()));
+        return (
+            false,
+            Some("Pattern must not contain newline characters".to_string()),
+        );
     }
     if pattern.len() > MAX_PATTERN_LENGTH {
         return (

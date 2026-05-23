@@ -9,14 +9,14 @@
 // frontend was built against them). Errors render as `{"detail": ...}`.
 
 use axum::{
+    Router,
     extract::{Json, Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Response},
     routing::{get, post},
-    Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -24,7 +24,7 @@ use std::process::Stdio;
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 use crate::api::v1::ApiState;
 use crate::error::{AppError, AppResult};
@@ -43,7 +43,9 @@ pub fn router() -> Router<ApiState> {
         .route("/servers/test-all", post(test_all_servers))
         .route(
             "/servers/{name}",
-            get(get_mcp_server).put(update_mcp_server).delete(delete_mcp_server),
+            get(get_mcp_server)
+                .put(update_mcp_server)
+                .delete(delete_mcp_server),
         )
         .route("/servers/{name}/toggle", post(toggle_mcp_server))
         .route("/servers/{name}/test", post(test_mcp_server_connection))
@@ -245,11 +247,7 @@ fn canonical_json(v: &Value) -> String {
             format!("{{{}}}", body)
         }
         Value::Array(a) => {
-            let body = a
-                .iter()
-                .map(canonical_json)
-                .collect::<Vec<_>>()
-                .join(", ");
+            let body = a.iter().map(canonical_json).collect::<Vec<_>>().join(", ");
             format!("[{}]", body)
         }
         Value::String(s) => json_str(s),
@@ -339,8 +337,14 @@ fn read_user_mcp_config(project_path: Option<&str>) -> Map<String, Value> {
     servers
 }
 
-fn read_project_mcp_config(project_path: Option<&str>, cwd_fallback: &std::path::Path) -> Map<String, Value> {
-    let config = read_json_file(&paths::get_project_mcp_config_file(project_path, cwd_fallback));
+fn read_project_mcp_config(
+    project_path: Option<&str>,
+    cwd_fallback: &std::path::Path,
+) -> Map<String, Value> {
+    let config = read_json_file(&paths::get_project_mcp_config_file(
+        project_path,
+        cwd_fallback,
+    ));
     match config
         .as_ref()
         .and_then(|c| c.get("mcpServers"))
@@ -477,7 +481,11 @@ async fn write_user_mcp_config(servers: &Map<String, Value>) -> bool {
     write_json_file(&path, &config).await
 }
 
-async fn write_project_mcp_config(servers: &Map<String, Value>, project_path: Option<&str>, cwd_fallback: &std::path::Path) -> bool {
+async fn write_project_mcp_config(
+    servers: &Map<String, Value>,
+    project_path: Option<&str>,
+    cwd_fallback: &std::path::Path,
+) -> bool {
     let path = paths::get_project_mcp_config_file(project_path, cwd_fallback);
     let mut config = read_json_file(&path).unwrap_or_else(|| json!({}));
     if !config.is_object() {
@@ -528,20 +536,23 @@ async fn get_cached_server_info(
     name: &str,
     scope: &str,
 ) -> Option<CacheRow> {
-    let row = sqlx::query_as::<_, (
-        bool,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        i64,
-        Option<String>,
-        Option<String>,
-        i64,
-        i64,
-        Option<String>,
-    )>(
+    let row = sqlx::query_as::<
+        _,
+        (
+            bool,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            i64,
+            Option<String>,
+            Option<String>,
+            i64,
+            i64,
+            Option<String>,
+        ),
+    >(
         "SELECT is_connected, last_tested_at, last_error, mcp_server_name, \
          mcp_server_version, tools, tool_count, resources, prompts, \
          resource_count, prompt_count, capabilities \
@@ -554,9 +565,8 @@ async fn get_cached_server_info(
     .ok()
     .flatten()?;
 
-    let parse = |s: Option<String>| -> Option<Value> {
-        s.and_then(|t| serde_json::from_str(&t).ok())
-    };
+    let parse =
+        |s: Option<String>| -> Option<Value> { s.and_then(|t| serde_json::from_str(&t).ok()) };
     Some(CacheRow {
         is_connected: row.0,
         last_tested_at: row.1,
@@ -635,14 +645,15 @@ async fn update_server_cache(
         .filter(|v| !v.is_null())
         .map(|v| serde_json::to_string(v).unwrap_or_else(|_| "null".into()));
 
-    let existing: Option<(i64,)> =
-        sqlx::query_as("SELECT id FROM mcp_server_cache WHERE server_name = ? AND server_scope = ?")
-            .bind(name)
-            .bind(scope)
-            .fetch_optional(pool)
-            .await
-            .ok()
-            .flatten();
+    let existing: Option<(i64,)> = sqlx::query_as(
+        "SELECT id FROM mcp_server_cache WHERE server_name = ? AND server_scope = ?",
+    )
+    .bind(name)
+    .bind(scope)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
 
     if let Some((id,)) = existing {
         let _ = sqlx::query(
@@ -698,7 +709,11 @@ async fn update_server_cache(
 
 // ---- server listing / retrieval --------------------------------------------
 
-async fn build_server_list(pool: &sqlx::SqlitePool, project_path: Option<&str>, cwd_fallback: &std::path::Path) -> Vec<Value> {
+async fn build_server_list(
+    pool: &sqlx::SqlitePool,
+    project_path: Option<&str>,
+    cwd_fallback: &std::path::Path,
+) -> Vec<Value> {
     let mut servers: Vec<Value> = Vec::new();
     let disabled = get_disabled_servers();
 
@@ -864,7 +879,8 @@ async fn list_mcp_servers(
     State(state): State<ApiState>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<Json<Value>> {
-    let servers = build_server_list(&state.pool, q.project_path.as_deref(), &state.cwd_fallback).await;
+    let servers =
+        build_server_list(&state.pool, q.project_path.as_deref(), &state.cwd_fallback).await;
     Ok(Json(json!({ "servers": servers })))
 }
 
@@ -895,15 +911,21 @@ async fn create_mcp_server(
         ));
     }
     if !["user", "project"].contains(&server.scope.as_str()) {
-        return Err(AppError::bad_request("Server scope must be 'user' or 'project'"));
+        return Err(AppError::bad_request(
+            "Server scope must be 'user' or 'project'",
+        ));
     }
     if server.type_ == "stdio" && server.command.as_deref().unwrap_or("").is_empty() {
-        return Err(AppError::bad_request("Command is required for stdio servers"));
+        return Err(AppError::bad_request(
+            "Command is required for stdio servers",
+        ));
     }
     if ["http", "sse"].contains(&server.type_.as_str())
         && server.url.as_deref().unwrap_or("").is_empty()
     {
-        return Err(AppError::bad_request("URL is required for http/sse servers"));
+        return Err(AppError::bad_request(
+            "URL is required for http/sse servers",
+        ));
     }
 
     let mut config = Map::new();
@@ -960,7 +982,9 @@ async fn update_mcp_server(
     Json(server): Json<ServerUpdateBody>,
 ) -> AppResult<Json<Value>> {
     if !["user", "project"].contains(&q.scope.as_str()) {
-        return Err(AppError::bad_request("Server scope must be 'user' or 'project'"));
+        return Err(AppError::bad_request(
+            "Server scope must be 'user' or 'project'",
+        ));
     }
 
     let mut servers = if q.scope == "user" {
@@ -1018,7 +1042,9 @@ async fn delete_mcp_server(
     Query(q): Query<ScopeQuery>,
 ) -> AppResult<Response> {
     if !["user", "project"].contains(&q.scope.as_str()) {
-        return Err(AppError::bad_request("Server scope must be 'user' or 'project'"));
+        return Err(AppError::bad_request(
+            "Server scope must be 'user' or 'project'",
+        ));
     }
 
     let mut servers = if q.scope == "user" {
@@ -1059,7 +1085,11 @@ async fn toggle_mcp_server(
     let mut disabled_list: std::collections::BTreeSet<String> = config
         .get("disabledMcpServers")
         .and_then(|v| v.as_array())
-        .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
 
     if req.disabled {
@@ -1166,11 +1196,20 @@ async fn test_connection(
         let args: Vec<String> = server
             .get("args")
             .and_then(|v| v.as_array())
-            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
 
         let result = stdio_probe(&command, &args).await;
-        if cache && result.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+        if cache
+            && result
+                .get("success")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        {
             let cfg = json!({
                 "type": server.get("type"),
                 "command": server.get("command"),
@@ -1186,7 +1225,12 @@ async fn test_connection(
             _ => return fail("No URL specified for http server"),
         };
         let result = http_probe(&server, &url).await;
-        if cache && result.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+        if cache
+            && result
+                .get("success")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+        {
             let cfg = json!({ "type": server.get("type"), "url": url });
             update_server_cache(pool, name, scope, &result, &compute_config_hash(&cfg)).await;
         }
@@ -1212,7 +1256,7 @@ async fn stdio_probe(command: &str, args: &[String]) -> Value {
     {
         Ok(c) => c,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return fail(format!("Command '{}' not found", command))
+            return fail(format!("Command '{}' not found", command));
         }
         Err(e) => return fail(format!("Failed to start server: {}", e)),
     };
@@ -1309,7 +1353,10 @@ async fn stdio_probe(command: &str, args: &[String]) -> Value {
                 "No output".to_string()
             };
             cleanup(child).await;
-            return fail(format!("Server closed without response: {}", truncate(&s, 300)));
+            return fail(format!(
+                "Server closed without response: {}",
+                truncate(&s, 300)
+            ));
         }
         Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
             if let Ok(Some(_)) = child.try_wait() {
@@ -1333,10 +1380,18 @@ async fn stdio_probe(command: &str, args: &[String]) -> Value {
     };
 
     if let Some(result) = init_resp.get("result") {
-        let server_info = result.get("serverInfo").cloned().unwrap_or_else(|| json!({}));
-        let server_name = str_field(&server_info, "name").unwrap_or("unknown").to_string();
+        let server_info = result
+            .get("serverInfo")
+            .cloned()
+            .unwrap_or_else(|| json!({}));
+        let server_name = str_field(&server_info, "name")
+            .unwrap_or("unknown")
+            .to_string();
         let server_version = server_info.get("version").cloned().unwrap_or(Value::Null);
-        let capabilities = result.get("capabilities").cloned().unwrap_or_else(|| json!({}));
+        let capabilities = result
+            .get("capabilities")
+            .cloned()
+            .unwrap_or_else(|| json!({}));
 
         async fn send_jsonrpc(
             stdin: &mut tokio::process::ChildStdin,
@@ -1447,7 +1502,9 @@ async fn stdio_probe(command: &str, args: &[String]) -> Value {
             },
         });
     } else if let Some(err) = init_resp.get("error") {
-        let msg = str_field(err, "message").unwrap_or("Unknown error").to_string();
+        let msg = str_field(err, "message")
+            .unwrap_or("Unknown error")
+            .to_string();
         cleanup(child).await;
         return fail(format!("MCP error: {}", msg));
     }
@@ -1466,7 +1523,10 @@ async fn http_probe(server: &Value, url: &str) -> Value {
                 .collect()
         })
         .unwrap_or_default();
-    headers.insert("Accept".into(), "application/json, text/event-stream".into());
+    headers.insert(
+        "Accept".into(),
+        "application/json, text/event-stream".into(),
+    );
 
     let server_name = str_field(server, "name").unwrap_or("");
     if let Some(tok) = creds_get_mcp_token(server_name, url) {
@@ -1531,7 +1591,10 @@ async fn http_probe(server: &Value, url: &str) -> Value {
 
     let status = resp.status();
     if status.as_u16() >= 400 {
-        return fail(format!("HTTP server returned error status {}", status.as_u16()));
+        return fail(format!(
+            "HTTP server returned error status {}",
+            status.as_u16()
+        ));
     }
 
     let resp_data: Value = match resp.json().await {
@@ -1549,14 +1612,22 @@ async fn http_probe(server: &Value, url: &str) -> Value {
             return json!({
                 "success": true,
                 "message": format!("Server responded (status {})", status.as_u16()),
-            })
+            });
         }
     };
 
-    let server_info = result.get("serverInfo").cloned().unwrap_or_else(|| json!({}));
-    let server_name_val = str_field(&server_info, "name").unwrap_or("unknown").to_string();
+    let server_info = result
+        .get("serverInfo")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    let server_name_val = str_field(&server_info, "name")
+        .unwrap_or("unknown")
+        .to_string();
     let server_version = server_info.get("version").cloned().unwrap_or(Value::Null);
-    let capabilities = result.get("capabilities").cloned().unwrap_or_else(|| json!({}));
+    let capabilities = result
+        .get("capabilities")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
 
     async fn http_jsonrpc(
         client: &reqwest::Client,
@@ -1583,8 +1654,7 @@ async fn http_probe(server: &Value, url: &str) -> Value {
 
     let mut tools = Vec::new();
     let mut tool_count = 0i64;
-    if let Some(tr) =
-        http_jsonrpc(&client, url, to_header_map(&headers), "tools/list", 2, 10).await
+    if let Some(tr) = http_jsonrpc(&client, url, to_header_map(&headers), "tools/list", 2, 10).await
     {
         if let Some(list) = tr
             .get("result")
@@ -1605,8 +1675,15 @@ async fn http_probe(server: &Value, url: &str) -> Value {
     let mut resources = Vec::new();
     let mut resource_count = 0i64;
     if capabilities.get("resources").is_some() {
-        if let Some(rr) =
-            http_jsonrpc(&client, url, to_header_map(&headers), "resources/list", 3, 5).await
+        if let Some(rr) = http_jsonrpc(
+            &client,
+            url,
+            to_header_map(&headers),
+            "resources/list",
+            3,
+            5,
+        )
+        .await
         {
             if let Some(list) = rr
                 .get("result")
@@ -1756,7 +1833,15 @@ async fn test_mcp_server_connection(
             "Server scope must be 'user', 'project', 'plugin', or 'managed'",
         ));
     }
-    let result = test_connection(&state.pool, &name, &q.scope, true, state.enable_external_tools, &state.cwd_fallback).await;
+    let result = test_connection(
+        &state.pool,
+        &name,
+        &q.scope,
+        true,
+        state.enable_external_tools,
+        &state.cwd_fallback,
+    )
+    .await;
     Ok(Json(test_response_body(&result)))
 }
 
@@ -1765,12 +1850,21 @@ async fn test_all_servers(
     State(state): State<ApiState>,
     Query(q): Query<ProjectPathQuery>,
 ) -> AppResult<Json<Value>> {
-    let servers = build_server_list(&state.pool, q.project_path.as_deref(), &state.cwd_fallback).await;
+    let servers =
+        build_server_list(&state.pool, q.project_path.as_deref(), &state.cwd_fallback).await;
     let mut results = Vec::new();
     for s in &servers {
         let name = s["name"].as_str().unwrap_or("").to_string();
         let scope = s["scope"].as_str().unwrap_or("").to_string();
-        let tr = test_connection(&state.pool, &name, &scope, true, state.enable_external_tools, &state.cwd_fallback).await;
+        let tr = test_connection(
+            &state.pool,
+            &name,
+            &scope,
+            true,
+            state.enable_external_tools,
+            &state.cwd_fallback,
+        )
+        .await;
         results.push(json!({
             "server_name": name,
             "scope": scope,
@@ -1964,7 +2058,10 @@ fn creds_get_mcp_token(server_name: &str, server_url: &str) -> Option<String> {
     if token.is_empty() {
         return None;
     }
-    let expires_at = entry.get("expiresAt").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let expires_at = entry
+        .get("expiresAt")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
     if expires_at != 0.0 && unix_now() > expires_at {
         return None;
     }
@@ -1980,10 +2077,13 @@ fn creds_get_auth_status(server_name: &str) -> Value {
                 "expired": false,
                 "server_url": Value::Null,
                 "has_client_registration": Value::Null,
-            })
+            });
         }
     };
-    let access_token = entry.get("accessToken").and_then(|v| v.as_str()).unwrap_or("");
+    let access_token = entry
+        .get("accessToken")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     if access_token.is_empty() {
         let has_client = entry
             .get("clientId")
@@ -1997,7 +2097,10 @@ fn creds_get_auth_status(server_name: &str) -> Value {
             "has_client_registration": has_client,
         });
     }
-    let expires_at = entry.get("expiresAt").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let expires_at = entry
+        .get("expiresAt")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
     let expired = expires_at != 0.0 && unix_now() > expires_at;
     json!({
         "has_token": true,
@@ -2091,7 +2194,11 @@ fn base64url_nopad(input: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let mut out = String::new();
     for chunk in input.chunks(3) {
-        let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
+        let b = [
+            chunk[0],
+            *chunk.get(1).unwrap_or(&0),
+            *chunk.get(2).unwrap_or(&0),
+        ];
         let n = ((b[0] as u32) << 16) | ((b[1] as u32) << 8) | (b[2] as u32);
         out.push(T[((n >> 18) & 63) as usize] as char);
         out.push(T[((n >> 12) & 63) as usize] as char);
@@ -2251,7 +2358,7 @@ async fn oauth_start_auth(
         _ => {
             return Err(
                 "OAuth metadata missing authorization_endpoint or token_endpoint".to_string(),
-            )
+            );
         }
     };
 
@@ -2262,7 +2369,10 @@ async fn oauth_start_auth(
     if let Some(reg_ep) = &registration_endpoint {
         match register_client(reg_ep, &redirect_uri, server_name).await {
             Ok(reg) => {
-                client_id = reg.get("client_id").and_then(|v| v.as_str()).map(String::from);
+                client_id = reg
+                    .get("client_id")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
                 client_secret = reg
                     .get("client_secret")
                     .and_then(|v| v.as_str())
@@ -2272,7 +2382,7 @@ async fn oauth_start_auth(
                 return Err(format!(
                     "OAuth client registration failed: {}. The server may not support dynamic client registration.",
                     e
-                ))
+                ));
             }
         }
     }
@@ -2340,7 +2450,7 @@ async fn oauth_handle_callback(code: &str, state: &str) -> Result<Value, String>
         None => {
             return Err(
                 "Invalid or expired OAuth state. Please try authenticating again.".to_string(),
-            )
+            );
         }
     };
 
@@ -2430,14 +2540,17 @@ async fn start_auth(
     headers: HeaderMap,
 ) -> AppResult<Json<Value>> {
     let server = get_server(&name, &q.scope, &state.cwd_fallback).ok_or_else(|| {
-        AppError::not_found(format!("Server '{}' not found in '{}' scope", name, q.scope))
+        AppError::not_found(format!(
+            "Server '{}' not found in '{}' scope",
+            name, q.scope
+        ))
     })?;
     let url = match str_field(&server, "url") {
         Some(u) if !u.is_empty() => u.to_string(),
         _ => {
             return Err(AppError::bad_request(
                 "OAuth authentication is only supported for HTTP/SSE servers with a URL",
-            ))
+            ));
         }
     };
 
@@ -2557,8 +2670,10 @@ fn default_limit() -> i64 {
 
 /// GET /api/v1/mcp/registry/search
 async fn search_registry(Query(q): Query<RegistrySearchQuery>) -> AppResult<Json<Value>> {
-    let mut params: Vec<(&str, String)> =
-        vec![("limit", q.limit.to_string()), ("version", "latest".to_string())];
+    let mut params: Vec<(&str, String)> = vec![
+        ("limit", q.limit.to_string()),
+        ("version", "latest".to_string()),
+    ];
     if let Some(s) = &q.q {
         if !s.is_empty() {
             params.push(("search", s.clone()));
@@ -2607,12 +2722,18 @@ async fn registry_get(url: &str) -> AppResult<Json<Value>> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(REGISTRY_REQUEST_TIMEOUT))
         .build()
-        .map_err(|e| AppError::new(StatusCode::BAD_GATEWAY, format!("Registry API error: {}", e)))?;
-    let resp = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| AppError::new(StatusCode::BAD_GATEWAY, format!("Registry API error: {}", e)))?;
+        .map_err(|e| {
+            AppError::new(
+                StatusCode::BAD_GATEWAY,
+                format!("Registry API error: {}", e),
+            )
+        })?;
+    let resp = client.get(url).send().await.map_err(|e| {
+        AppError::new(
+            StatusCode::BAD_GATEWAY,
+            format!("Registry API error: {}", e),
+        )
+    })?;
     let status = resp.status();
     if !status.is_success() {
         return Err(AppError::new(
@@ -2620,10 +2741,12 @@ async fn registry_get(url: &str) -> AppResult<Json<Value>> {
             format!("Registry API error: HTTP status {}", status.as_u16()),
         ));
     }
-    let body: Value = resp
-        .json()
-        .await
-        .map_err(|e| AppError::new(StatusCode::BAD_GATEWAY, format!("Registry API error: {}", e)))?;
+    let body: Value = resp.json().await.map_err(|e| {
+        AppError::new(
+            StatusCode::BAD_GATEWAY,
+            format!("Registry API error: {}", e),
+        )
+    })?;
     Ok(Json(body))
 }
 
@@ -2681,7 +2804,11 @@ fn generate_package_config(
         }
         "oci" => {
             config.insert("command".into(), json!("docker"));
-            args.extend(["run", "-i", "--rm", identifier].iter().map(|s| s.to_string()));
+            args.extend(
+                ["run", "-i", "--rm", identifier]
+                    .iter()
+                    .map(|s| s.to_string()),
+            );
         }
         _ => {
             config.insert("command".into(), json!(runtime_hint.unwrap_or(identifier)));

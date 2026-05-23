@@ -1,12 +1,12 @@
 // PORTED: plan_service.py + api/v1/plans.py
 
 use axum::{
+    Router,
     extract::{Json, Query, State},
     routing::get,
-    Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 
 use crate::api::v1::ApiState;
@@ -230,9 +230,7 @@ fn count_tables(content: &str) -> usize {
 
 /// Unix mtime -> Python `datetime.fromtimestamp(mtime).isoformat()` (local TZ).
 fn mtime_iso(meta: &std::fs::Metadata) -> String {
-    let modified = meta
-        .modified()
-        .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+    let modified = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
     let dt: chrono::DateTime<chrono::Local> = modified.into();
     dt.naive_local().format("%Y-%m-%dT%H:%M:%S%.6f").to_string()
 }
@@ -259,8 +257,12 @@ fn list_plans_impl(plans_dir: &Path) -> Vec<Value> {
         return plans;
     }
     for plan_file in glob_md(plans_dir) {
-        let Ok(meta) = std::fs::metadata(&plan_file) else { continue };
-        let Ok(content) = std::fs::read_to_string(&plan_file) else { continue };
+        let Ok(meta) = std::fs::metadata(&plan_file) else {
+            continue;
+        };
+        let Ok(content) = std::fs::read_to_string(&plan_file) else {
+            continue;
+        };
         let title = extract_title(&content);
         let excerpt = extract_excerpt(&content, 200);
         plans.push(json!({
@@ -307,13 +309,17 @@ fn search_plans_impl(plans_dir: &Path, query: &str) -> Vec<Value> {
         return results;
     }
     for plan_file in glob_md(plans_dir) {
-        let Ok(content) = std::fs::read_to_string(&plan_file) else { continue };
+        let Ok(content) = std::fs::read_to_string(&plan_file) else {
+            continue;
+        };
         let content_lower = content.to_lowercase();
         if !content_lower.contains(&query_lower) {
             continue;
         }
         let title = extract_title(&content);
-        let Ok(meta) = std::fs::metadata(&plan_file) else { continue };
+        let Ok(meta) = std::fs::metadata(&plan_file) else {
+            continue;
+        };
 
         let mut matches: Vec<String> = Vec::new();
         for line in content.split('\n') {
@@ -334,7 +340,11 @@ fn search_plans_impl(plans_dir: &Path, query: &str) -> Vec<Value> {
                         .take(end.saturating_sub(start))
                         .collect();
                     let prefix = if start > 0 { "..." } else { "" };
-                    let suffix = if end < stripped.chars().count() { "..." } else { "" };
+                    let suffix = if end < stripped.chars().count() {
+                        "..."
+                    } else {
+                        ""
+                    };
                     format!("{}{}{}", prefix, mid, suffix)
                 } else {
                     stripped.to_string()
@@ -440,7 +450,9 @@ fn get_plan_sessions(slug: &str) -> Vec<Value> {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
 
-        let Ok(jrd) = std::fs::read_dir(&project_folder) else { continue };
+        let Ok(jrd) = std::fs::read_dir(&project_folder) else {
+            continue;
+        };
         for jentry in jrd.flatten() {
             let jp = jentry.path();
             if jp.extension().and_then(|e| e.to_str()) != Some("jsonl") {
@@ -547,7 +559,9 @@ async fn search_plans(
     let plans_dir = resolve_plans_dir(q.project_path.as_deref(), &state.cwd_fallback);
     let results = search_plans_impl(&plans_dir, &q.q);
     let total = results.len();
-    Ok(Json(json!({ "results": results, "query": q.q, "total": total })))
+    Ok(Json(
+        json!({ "results": results, "query": q.q, "total": total }),
+    ))
 }
 
 /// GET /api/v1/plans/{filename}

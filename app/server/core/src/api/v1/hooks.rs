@@ -1,12 +1,12 @@
 // PORTED: hook_service.py + api/v1/hooks.py
 
 use axum::{
+    Router,
     extract::{Json, Path, Query},
     routing::{get, put},
-    Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -46,8 +46,22 @@ fn gen_uuid_v4() -> String {
 
     format!(
         "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
-        b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15]
+        b[0],
+        b[1],
+        b[2],
+        b[3],
+        b[4],
+        b[5],
+        b[6],
+        b[7],
+        b[8],
+        b[9],
+        b[10],
+        b[11],
+        b[12],
+        b[13],
+        b[14],
+        b[15]
     )
 }
 
@@ -275,7 +289,8 @@ fn collect_hooks(project_path: Option<&str>) -> Vec<Value> {
     }
 
     if let Some(pp) = project_path {
-        let project_settings_file = paths::get_project_settings_file(Some(pp), std::path::Path::new(""));
+        let project_settings_file =
+            paths::get_project_settings_file(Some(pp), std::path::Path::new(""));
         if project_settings_file.exists() {
             if let Some(data) = read_settings(&project_settings_file) {
                 let section = data.get("hooks").cloned().unwrap_or_else(|| json!({}));
@@ -368,7 +383,7 @@ async fn create_hook(
             None => {
                 return Err(AppError::internal(
                     "Failed to create hook: invalid settings JSON".to_string(),
-                ))
+                ));
             }
         }
     } else {
@@ -525,7 +540,7 @@ async fn update_hook(
         None => {
             return Err(AppError::internal(
                 "Failed to update hook: invalid settings JSON".to_string(),
-            ))
+            ));
         }
     };
 
@@ -539,15 +554,10 @@ async fn update_hook(
     let mut moved_hook: Option<Value> = None;
     let mut move_target_event: Option<String> = None;
 
-    if let Some(hooks_section) = settings
-        .get_mut("hooks")
-        .and_then(|h| h.as_object_mut())
-    {
+    if let Some(hooks_section) = settings.get_mut("hooks").and_then(|h| h.as_object_mut()) {
         let event_names: Vec<String> = hooks_section.keys().cloned().collect();
         'outer: for event in event_names {
-            let Some(event_hooks) = hooks_section
-                .get_mut(&event)
-                .and_then(|v| v.as_array_mut())
+            let Some(event_hooks) = hooks_section.get_mut(&event).and_then(|v| v.as_array_mut())
             else {
                 continue;
             };
@@ -642,10 +652,7 @@ async fn update_hook(
                 }
 
                 // Handle event change.
-                let event_changes = new_event
-                    .as_ref()
-                    .map(|ne| ne != &event)
-                    .unwrap_or(false);
+                let event_changes = new_event.as_ref().map(|ne| ne != &event).unwrap_or(false);
 
                 if event_changes {
                     let ne = new_event.clone().unwrap();
@@ -725,21 +732,16 @@ async fn delete_hook(
         None => {
             return Err(AppError::internal(
                 "Failed to delete hook: invalid settings JSON".to_string(),
-            ))
+            ));
         }
     };
 
     let mut removed = false;
 
-    if let Some(hooks_section) = settings
-        .get_mut("hooks")
-        .and_then(|h| h.as_object_mut())
-    {
+    if let Some(hooks_section) = settings.get_mut("hooks").and_then(|h| h.as_object_mut()) {
         let event_names: Vec<String> = hooks_section.keys().cloned().collect();
         'outer: for event in event_names {
-            let Some(event_hooks) = hooks_section
-                .get_mut(&event)
-                .and_then(|v| v.as_array_mut())
+            let Some(event_hooks) = hooks_section.get_mut(&event).and_then(|v| v.as_array_mut())
             else {
                 continue;
             };

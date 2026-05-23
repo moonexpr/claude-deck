@@ -7,14 +7,14 @@
 // commands (it builds `base_dir / path` directly) — behavior matched 1:1.
 
 use axum::{
+    Router,
     extract::{Json, Path as AxumPath, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
-    Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 
 use crate::api::v1::ApiState;
@@ -539,7 +539,12 @@ fn get_plugin_command(plugin_name: &str, path: &str) -> Option<Value> {
 }
 
 /// Port of `CommandService.get_command`.
-fn get_command_impl(scope: &str, path: &str, project_path: Option<&str>, cwd_fallback: &Path) -> Option<Value> {
+fn get_command_impl(
+    scope: &str,
+    path: &str,
+    project_path: Option<&str>,
+    cwd_fallback: &Path,
+) -> Option<Value> {
     let base_dir: PathBuf;
     if scope == "user" {
         base_dir = paths::get_claude_user_commands_dir();
@@ -591,7 +596,12 @@ async fn get_command(
             scope
         )));
     }
-    match get_command_impl(&scope, &path, q.project_path.as_deref(), &state.cwd_fallback) {
+    match get_command_impl(
+        &scope,
+        &path,
+        q.project_path.as_deref(),
+        &state.cwd_fallback,
+    ) {
         Some(cmd) => Ok(Json(cmd)),
         None => Err(AppError::not_found(format!(
             "Command not found: {}/{}",

@@ -18,7 +18,6 @@
 ///   6. validation_rejects_empty_title
 ///   7. put_404_on_missing_id
 ///   8. delete_204_then_get_404
-
 use axum::body::Body;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
@@ -29,8 +28,7 @@ use tower::ServiceExt;
 
 /// Create a uniquely-named tempdir for a single test run.
 fn make_tmp() -> std::path::PathBuf {
-    static COUNTER: std::sync::atomic::AtomicU32 =
-        std::sync::atomic::AtomicU32::new(0);
+    static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
     let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let tmp = std::env::temp_dir().join(format!(
         "claude_deck_chat_test_{}_{}_{n}",
@@ -133,14 +131,12 @@ async fn do_delete(router: &axum::Router, uri: &str) -> u16 {
 /// Query sqlite_master to check if a table exists.
 async fn table_exists(pool: &sqlx::SqlitePool, name: &str) -> bool {
     use sqlx::Row as _;
-    sqlx::query(
-        "SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type='table' AND name=?",
-    )
-    .bind(name)
-    .fetch_one(pool)
-    .await
-    .map(|r| r.get::<i64, _>("cnt") > 0)
-    .unwrap_or(false)
+    sqlx::query("SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type='table' AND name=?")
+        .bind(name)
+        .fetch_one(pool)
+        .await
+        .map(|r| r.get::<i64, _>("cnt") > 0)
+        .unwrap_or(false)
 }
 
 // ---------------------------------------------------------------------------
@@ -153,11 +149,16 @@ async fn table_exists(pool: &sqlx::SqlitePool, name: &str) -> bool {
 async fn migration_creates_table() {
     let tmp = make_tmp();
     let config = make_config(&tmp);
-    let router = server_core::app(config).await.expect("server_core::app failed");
+    let router = server_core::app(config)
+        .await
+        .expect("server_core::app failed");
 
     // GET /api/v1/chat (no trailing slash — axum 0.8 is slash-strict)
     let (status, _) = do_get(&router, "/api/v1/chat").await;
-    assert_eq!(status, 200, "list endpoint must return 200 — table must exist");
+    assert_eq!(
+        status, 200,
+        "list endpoint must return 200 — table must exist"
+    );
 
     let _ = std::fs::remove_dir_all(&tmp);
 }
@@ -249,12 +250,19 @@ async fn migration_idempotent_on_existing_db() {
 async fn crud_round_trip() {
     let tmp = make_tmp();
     let config = make_config(&tmp);
-    let router = server_core::app(config).await.expect("server_core::app failed");
+    let router = server_core::app(config)
+        .await
+        .expect("server_core::app failed");
 
     // POST — create
     let create_body = r#"{"title":"Round Trip","messages":[{"role":"user","content":"Hello"}]}"#;
     let (status, bytes) = do_post(&router, "/api/v1/chat", create_body).await;
-    assert_eq!(status, 201, "POST /chat must return 201; body: {}", String::from_utf8_lossy(&bytes));
+    assert_eq!(
+        status,
+        201,
+        "POST /chat must return 201; body: {}",
+        String::from_utf8_lossy(&bytes)
+    );
 
     let created: serde_json::Value =
         serde_json::from_slice(&bytes).expect("POST response must be JSON");
@@ -262,8 +270,14 @@ async fn crud_round_trip() {
     assert_eq!(created["title"], "Round Trip");
     assert_eq!(created["messages"][0]["role"], "user");
     assert_eq!(created["messages"][0]["content"], "Hello");
-    assert!(created["created_at"].is_number(), "created_at must be a number");
-    assert!(created["updated_at"].is_number(), "updated_at must be a number");
+    assert!(
+        created["created_at"].is_number(),
+        "created_at must be a number"
+    );
+    assert!(
+        created["updated_at"].is_number(),
+        "updated_at must be a number"
+    );
 
     // GET single — verify round-trip
     let uri = format!("/api/v1/chat/{}", id);
@@ -274,11 +288,11 @@ async fn crud_round_trip() {
     assert_eq!(fetched["messages"][0]["content"], "Hello");
 
     // PUT — replace messages
-    let update_body = r#"{"messages":[{"role":"user","content":"Updated"},{"role":"assistant","content":"OK"}]}"#;
+    let update_body =
+        r#"{"messages":[{"role":"user","content":"Updated"},{"role":"assistant","content":"OK"}]}"#;
     let (status, bytes) = do_put(&router, &uri, update_body).await;
     assert_eq!(status, 200, "PUT /chat/{{id}} must return 200");
-    let updated: serde_json::Value =
-        serde_json::from_slice(&bytes).expect("PUT response JSON");
+    let updated: serde_json::Value = serde_json::from_slice(&bytes).expect("PUT response JSON");
     assert_eq!(updated["messages"].as_array().unwrap().len(), 2);
     assert_eq!(updated["messages"][0]["content"], "Updated");
     // title unchanged
@@ -287,8 +301,7 @@ async fn crud_round_trip() {
     // GET again — verify PUT persisted
     let (status, bytes) = do_get(&router, &uri).await;
     assert_eq!(status, 200, "GET after PUT must return 200");
-    let refetched: serde_json::Value =
-        serde_json::from_slice(&bytes).expect("GET after PUT JSON");
+    let refetched: serde_json::Value = serde_json::from_slice(&bytes).expect("GET after PUT JSON");
     assert_eq!(refetched["messages"].as_array().unwrap().len(), 2);
 
     // DELETE
@@ -298,8 +311,7 @@ async fn crud_round_trip() {
     // GET after DELETE → 404
     let (status, bytes) = do_get(&router, &uri).await;
     assert_eq!(status, 404, "GET after DELETE must return 404");
-    let err: serde_json::Value =
-        serde_json::from_slice(&bytes).expect("404 body must be JSON");
+    let err: serde_json::Value = serde_json::from_slice(&bytes).expect("404 body must be JSON");
     assert_eq!(err["status"], "not_found");
 
     let _ = std::fs::remove_dir_all(&tmp);
@@ -316,19 +328,31 @@ async fn crud_round_trip() {
 async fn list_returns_message_count_not_messages() {
     let tmp = make_tmp();
     let config = make_config(&tmp);
-    let router = server_core::app(config).await.expect("server_core::app failed");
+    let router = server_core::app(config)
+        .await
+        .expect("server_core::app failed");
 
     // POST first conversation (1 message).
     let body1 = r#"{"title":"Alpha","messages":[{"role":"user","content":"one"}]}"#;
     let (status, bytes) = do_post(&router, "/api/v1/chat", body1).await;
-    assert_eq!(status, 201, "POST alpha: {}", String::from_utf8_lossy(&bytes));
+    assert_eq!(
+        status,
+        201,
+        "POST alpha: {}",
+        String::from_utf8_lossy(&bytes)
+    );
     let alpha: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let alpha_id = alpha["id"].as_str().unwrap().to_string();
 
     // POST second conversation (2 messages).
     let body2 = r#"{"title":"Beta","messages":[{"role":"user","content":"one"},{"role":"assistant","content":"two"}]}"#;
     let (status, bytes) = do_post(&router, "/api/v1/chat", body2).await;
-    assert_eq!(status, 201, "POST beta: {}", String::from_utf8_lossy(&bytes));
+    assert_eq!(
+        status,
+        201,
+        "POST beta: {}",
+        String::from_utf8_lossy(&bytes)
+    );
     let beta: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let beta_id = beta["id"].as_str().unwrap().to_string();
 
@@ -344,7 +368,9 @@ async fn list_returns_message_count_not_messages() {
     let (status, bytes) = do_get(&router, "/api/v1/chat").await;
     assert_eq!(status, 200, "GET /chat list");
     let list: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    let convs = list["conversations"].as_array().expect("conversations array");
+    let convs = list["conversations"]
+        .as_array()
+        .expect("conversations array");
 
     // Must have at least the two we created.
     assert!(convs.len() >= 2, "expected at least 2 conversations");
@@ -408,7 +434,9 @@ async fn list_returns_message_count_not_messages() {
 async fn bad_origin_rejected() {
     let tmp = make_tmp();
     let config = make_config(&tmp);
-    let router = server_core::app(config).await.expect("server_core::app failed");
+    let router = server_core::app(config)
+        .await
+        .expect("server_core::app failed");
 
     let status = do_post_with_origin(
         &router,
@@ -433,22 +461,19 @@ async fn bad_origin_rejected() {
 async fn validation_rejects_empty_title() {
     let tmp = make_tmp();
     let config = make_config(&tmp);
-    let router = server_core::app(config).await.expect("server_core::app failed");
+    let router = server_core::app(config)
+        .await
+        .expect("server_core::app failed");
 
-    let (status, bytes) = do_post(
-        &router,
-        "/api/v1/chat",
-        r#"{"title":"","messages":[]}"#,
-    )
-    .await;
+    let (status, bytes) = do_post(&router, "/api/v1/chat", r#"{"title":"","messages":[]}"#).await;
 
     assert_eq!(
-        status, 400,
+        status,
+        400,
         "empty title must return 400; body: {}",
         String::from_utf8_lossy(&bytes)
     );
-    let body: serde_json::Value =
-        serde_json::from_slice(&bytes).expect("400 body must be JSON");
+    let body: serde_json::Value = serde_json::from_slice(&bytes).expect("400 body must be JSON");
     assert_eq!(body["status"], "bad_request");
 
     let _ = std::fs::remove_dir_all(&tmp);
@@ -463,7 +488,9 @@ async fn validation_rejects_empty_title() {
 async fn put_404_on_missing_id() {
     let tmp = make_tmp();
     let config = make_config(&tmp);
-    let router = server_core::app(config).await.expect("server_core::app failed");
+    let router = server_core::app(config)
+        .await
+        .expect("server_core::app failed");
 
     let (status, bytes) = do_put(
         &router,
@@ -473,12 +500,12 @@ async fn put_404_on_missing_id() {
     .await;
 
     assert_eq!(
-        status, 404,
+        status,
+        404,
         "PUT on missing id must return 404; body: {}",
         String::from_utf8_lossy(&bytes)
     );
-    let body: serde_json::Value =
-        serde_json::from_slice(&bytes).expect("404 body must be JSON");
+    let body: serde_json::Value = serde_json::from_slice(&bytes).expect("404 body must be JSON");
     assert_eq!(body["status"], "not_found");
 
     let _ = std::fs::remove_dir_all(&tmp);
@@ -493,7 +520,9 @@ async fn put_404_on_missing_id() {
 async fn delete_204_then_get_404() {
     let tmp = make_tmp();
     let config = make_config(&tmp);
-    let router = server_core::app(config).await.expect("server_core::app failed");
+    let router = server_core::app(config)
+        .await
+        .expect("server_core::app failed");
 
     // Create a conversation.
     let (status, bytes) = do_post(
@@ -514,8 +543,7 @@ async fn delete_204_then_get_404() {
     // GET → 404
     let (status, bytes) = do_get(&router, &uri).await;
     assert_eq!(status, 404, "GET after DELETE must return 404");
-    let body: serde_json::Value =
-        serde_json::from_slice(&bytes).expect("404 body JSON");
+    let body: serde_json::Value = serde_json::from_slice(&bytes).expect("404 body JSON");
     assert_eq!(body["status"], "not_found");
 
     let _ = std::fs::remove_dir_all(&tmp);

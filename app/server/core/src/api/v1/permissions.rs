@@ -8,14 +8,14 @@
 //! `uuid.uuid5(uuid.NAMESPACE_DNS, ...)`.
 
 use axum::{
+    Router,
     extract::{Json, Path as AxumPath, Query},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, put},
-    Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::api::v1::ApiState;
 use crate::error::{AppError, AppResult};
@@ -196,7 +196,21 @@ fn uuid5_dns(name: &str) -> String {
 
     format!(
         "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13], b[14],
+        b[0],
+        b[1],
+        b[2],
+        b[3],
+        b[4],
+        b[5],
+        b[6],
+        b[7],
+        b[8],
+        b[9],
+        b[10],
+        b[11],
+        b[12],
+        b[13],
+        b[14],
         b[15]
     )
 }
@@ -289,9 +303,8 @@ fn list_permissions_core(project_path: Option<&str>) -> (Vec<Rule>, Value) {
                                 Value::Array(merged.into_iter().map(Value::String).collect());
                         }
                         _ => {
-                            additional_directories = Value::Array(
-                                proj_strs.into_iter().map(Value::String).collect(),
-                            );
+                            additional_directories =
+                                Value::Array(proj_strs.into_iter().map(Value::String).collect());
                         }
                     }
                 }
@@ -320,7 +333,10 @@ fn settings_path_for(
         Ok(paths::get_claude_user_settings_file())
     } else {
         match project_path {
-            Some(pp) => Ok(paths::get_project_settings_file(Some(pp), std::path::Path::new(""))),
+            Some(pp) => Ok(paths::get_project_settings_file(
+                Some(pp),
+                std::path::Path::new(""),
+            )),
             None => Err(AppError::bad_request(
                 "project_path is required for project scope",
             )),
@@ -399,7 +415,11 @@ async fn update_settings(
     }
     {
         let obj = settings.as_object_mut().unwrap();
-        if !obj.get("permissions").map(|v| v.is_object()).unwrap_or(false) {
+        if !obj
+            .get("permissions")
+            .map(|v| v.is_object())
+            .unwrap_or(false)
+        {
             obj.insert("permissions".to_string(), json!({}));
         }
         let perms = obj
@@ -486,7 +506,11 @@ async fn add_permission_core(
     }
     {
         let obj = settings.as_object_mut().unwrap();
-        if !obj.get("permissions").map(|v| v.is_object()).unwrap_or(false) {
+        if !obj
+            .get("permissions")
+            .map(|v| v.is_object())
+            .unwrap_or(false)
+        {
             obj.insert(
                 "permissions".to_string(),
                 json!({ "allow": [], "ask": [], "deny": [] }),
@@ -680,7 +704,10 @@ async fn remove_permission_core(
             .get_mut("permissions")
             .and_then(|v| v.as_object_mut())
             .unwrap();
-        if let Some(list) = perms.get_mut(&existing.type_).and_then(|v| v.as_array_mut()) {
+        if let Some(list) = perms
+            .get_mut(&existing.type_)
+            .and_then(|v| v.as_array_mut())
+        {
             if let Some(pos) = list
                 .iter()
                 .position(|v| v.as_str() == Some(existing.pattern.as_str()))

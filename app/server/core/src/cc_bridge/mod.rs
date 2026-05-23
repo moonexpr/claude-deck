@@ -15,7 +15,6 @@
 ///   - Resize:       text JSON {"kind":"resize","cols":N,"rows":N} (either direction)
 ///   - Signal:       text JSON {"kind":"signal","sig":"INT"|"TERM"|"KILL"} (client→server)
 ///   - Exit:         text JSON {"kind":"exit","code":N} (server→client, terminal frame)
-
 pub mod proto;
 pub mod pty;
 
@@ -24,17 +23,17 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::{
+    Json, Router,
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
         Path as AxumPath, Query,
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     http::HeaderMap,
     response::Response,
     routing::get,
-    Json, Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
 use crate::api::v1::ApiState;
@@ -48,7 +47,10 @@ use crate::error::{AppError, AppResult};
 pub fn router() -> Router<ApiState> {
     Router::new()
         .route("/sessions", get(list_sessions).post(spawn_session_endpoint))
-        .route("/sessions/{target}", axum::routing::delete(kill_session_endpoint))
+        .route(
+            "/sessions/{target}",
+            axum::routing::delete(kill_session_endpoint),
+        )
         .route("/sessions/{target}/preview", get(get_session_preview))
         .route("/sessions/{target}/terminal", get(session_terminal))
         .route("/token", get(get_terminal_token))
@@ -102,8 +104,7 @@ fn getrandom(buf: &mut [u8]) -> std::io::Result<()> {
 }
 
 fn base64_urlsafe(data: &[u8]) -> String {
-    const T: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let mut out = String::new();
     for chunk in data.chunks(3) {
         let b = [
@@ -129,10 +130,7 @@ fn base64_urlsafe(data: &[u8]) -> String {
 // ---------------------------------------------------------------------------
 
 fn origin_netloc(origin: &str) -> Option<String> {
-    let rest = origin
-        .split_once("://")
-        .map(|(_, r)| r)
-        .unwrap_or(origin);
+    let rest = origin.split_once("://").map(|(_, r)| r).unwrap_or(origin);
     let netloc = rest.split(['/', '?', '#']).next().unwrap_or("");
     if netloc.is_empty() {
         None
@@ -297,8 +295,7 @@ fn resolve_project_directory(project_folder: &str) -> Result<String, AppError> {
         project_folder.trim_start_matches('-').replace('-', "/")
     );
     let decoded_path = PathBuf::from(&decoded);
-    let resolved =
-        std::fs::canonicalize(&decoded_path).unwrap_or_else(|_| decoded_path.clone());
+    let resolved = std::fs::canonicalize(&decoded_path).unwrap_or_else(|_| decoded_path.clone());
 
     let has_traversal = decoded_path
         .components()
@@ -383,7 +380,11 @@ fn spawn_session(req: &SpawnRequest) -> Result<Value, AppError> {
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("project");
-    let dir_basename = if dir_basename.is_empty() { "project" } else { dir_basename };
+    let dir_basename = if dir_basename.is_empty() {
+        "project"
+    } else {
+        dir_basename
+    };
     let safe_basename: String = dir_basename
         .chars()
         .map(|c| {
@@ -420,9 +421,10 @@ fn spawn_session(req: &SpawnRequest) -> Result<Value, AppError> {
             command.push(wt_name);
         }
         "resume" => {
-            let sid = req.session_id.clone().ok_or_else(|| {
-                AppError::bad_request("session_id is required for resume mode")
-            })?;
+            let sid = req
+                .session_id
+                .clone()
+                .ok_or_else(|| AppError::bad_request("session_id is required for resume mode"))?;
             command.push("--resume".to_string());
             command.push(sid);
         }
@@ -471,10 +473,13 @@ fn spawn_session(req: &SpawnRequest) -> Result<Value, AppError> {
         Err(e) => return Err(AppError::bad_request(e.to_string())),
     }
 
-    let wt = req
-        .worktree_name
-        .clone()
-        .or_else(|| if req.mode == "worktree" { Some(name.clone()) } else { None });
+    let wt = req.worktree_name.clone().or_else(|| {
+        if req.mode == "worktree" {
+            Some(name.clone())
+        } else {
+            None
+        }
+    });
     spawned_sessions().lock().unwrap().insert(
         name.clone(),
         SpawnMeta {
@@ -562,14 +567,11 @@ async fn get_terminal_token() -> AppResult<Json<Value>> {
 }
 
 /// GET /api/v1/cc-bridge/sessions/{target}/preview
-async fn get_session_preview(
-    AxumPath(target): AxumPath<String>,
-) -> AppResult<Json<Value>> {
+async fn get_session_preview(AxumPath(target): AxumPath<String>) -> AppResult<Json<Value>> {
     let cap_target = target.clone();
-    let content =
-        tokio::task::spawn_blocking(move || capture_pane_preview(&cap_target))
-            .await
-            .map_err(|e| AppError::internal(e.to_string()))?;
+    let content = tokio::task::spawn_blocking(move || capture_pane_preview(&cap_target))
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))?;
     if content.is_empty() {
         return Err(AppError::not_found("Could not capture pane"));
     }
@@ -593,9 +595,7 @@ async fn kill_session_endpoint(
 }
 
 /// POST /api/v1/cc-bridge/sessions
-async fn spawn_session_endpoint(
-    Json(req): Json<SpawnRequest>,
-) -> AppResult<Json<Value>> {
+async fn spawn_session_endpoint(Json(req): Json<SpawnRequest>) -> AppResult<Json<Value>> {
     let result = tokio::task::spawn_blocking(move || spawn_session(&req))
         .await
         .map_err(|e| AppError::internal(e.to_string()))??;
@@ -666,7 +666,7 @@ async fn session_terminal(
 /// Phase 1: wait for the Open frame.
 /// Phase 2: spawn the child, start the read loop, relay I/O until exit.
 async fn pty_relay(mut socket: WebSocket) {
-    use proto::{parse_client_text, ClientTextFrame, ExitFrame};
+    use proto::{ClientTextFrame, ExitFrame, parse_client_text};
 
     // ---- Phase 1: wait for Open frame ----
     let open_frame = loop {

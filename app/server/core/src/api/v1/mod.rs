@@ -1,33 +1,30 @@
-pub mod sessions;
-pub mod presence;
-pub mod projects;
-pub mod config;
-pub mod usage;
-pub mod hooks;
-pub mod status;
 pub mod agents;
 pub mod ai;
 pub mod backup;
 pub mod chat;
 pub mod cli;
 pub mod commands;
+pub mod config;
 pub mod context;
+pub mod hooks;
 pub mod mcp;
 pub mod memory;
 pub mod output_styles;
 pub mod permissions;
 pub mod plans;
 pub mod plugins;
+pub mod presence;
+pub mod projects;
+pub mod sessions;
+pub mod status;
 pub mod statusline;
+pub mod usage;
 
-use axum::{
-    routing::get,
-    Router,
-};
+use crate::services::session_service::SessionService;
+use axum::{Router, routing::get};
 use sqlx::SqlitePool;
 use std::path::PathBuf;
 use std::sync::Arc;
-use crate::services::session_service::SessionService;
 
 #[derive(Clone)]
 pub struct ApiState {

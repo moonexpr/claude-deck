@@ -1,10 +1,10 @@
-use std::path::{Path, PathBuf};
+use anyhow::{Result, anyhow};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::io;
+use std::path::{Path, PathBuf};
 use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
-use serde_json::Value;
-use sha2::{Sha256, Digest};
-use anyhow::{Result, anyhow};
 
 pub struct SessionService {
     projects_dir: PathBuf,
@@ -30,7 +30,11 @@ impl SessionService {
     }
 
     /// Safely resolve a filepath within the projects directory.
-    pub async fn resolve_session_path(&self, project_folder: &str, session_id: &str) -> Result<PathBuf> {
+    pub async fn resolve_session_path(
+        &self,
+        project_folder: &str,
+        session_id: &str,
+    ) -> Result<PathBuf> {
         let project_folder = self.validate_path_component(project_folder)?;
         let session_id = self.validate_path_component(session_id)?;
 
@@ -40,10 +44,14 @@ impl SessionService {
 
         // Canonicalize to check if it's still within projects_dir
         let canonical_projects = fs::canonicalize(&self.projects_dir).await?;
-        let canonical_file = fs::canonicalize(&path).await.map_err(|e| anyhow!("File not found or inaccessible: {}", e))?;
+        let canonical_file = fs::canonicalize(&path)
+            .await
+            .map_err(|e| anyhow!("File not found or inaccessible: {}", e))?;
 
         if !canonical_file.starts_with(&canonical_projects) {
-            return Err(anyhow!("Path traversal detected outside projects directory"));
+            return Err(anyhow!(
+                "Path traversal detected outside projects directory"
+            ));
         }
 
         Ok(canonical_file)
@@ -56,7 +64,11 @@ impl SessionService {
 
         let metadata = fs::metadata(filepath).await?;
         if metadata.len() > MAX_FILE_SIZE {
-            return Err(anyhow!("File too large: {} bytes (max {} bytes)", metadata.len(), MAX_FILE_SIZE));
+            return Err(anyhow!(
+                "File too large: {} bytes (max {} bytes)",
+                metadata.len(),
+                MAX_FILE_SIZE
+            ));
         }
 
         let file = File::open(filepath).await?;
@@ -66,7 +78,10 @@ impl SessionService {
 
         while let Some(line) = lines.next_line().await? {
             if entries.len() >= MAX_ENTRIES {
-                return Err(anyhow!("Too many entries in session file (max {})", MAX_ENTRIES));
+                return Err(anyhow!(
+                    "Too many entries in session file (max {})",
+                    MAX_ENTRIES
+                ));
             }
             if !line.trim().is_empty() {
                 if let Ok(json) = serde_json::from_str(&line) {
@@ -82,11 +97,15 @@ impl SessionService {
     pub async fn get_file_hash(&self, filepath: &Path) -> Result<String> {
         let metadata = fs::metadata(filepath).await?;
         let size = metadata.len();
-        let mtime = metadata.modified()?.duration_since(std::time::UNIX_EPOCH)?.as_secs();
+        let mtime = metadata
+            .modified()?
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs();
 
         let mut hasher = Sha256::new();
 
-        if size < 1024 * 1024 { // < 1MB, hash everything
+        if size < 1024 * 1024 {
+            // < 1MB, hash everything
             let content = fs::read(filepath).await?;
             hasher.update(&content);
         } else {

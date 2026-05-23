@@ -1,12 +1,12 @@
 // PORTED: project_service.py + api/v1/projects.py
 
 use axum::{
+    Router,
     extract::{Json, State},
     routing::{get, post},
-    Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 
 use crate::api::v1::ApiState;
@@ -53,7 +53,10 @@ struct SetActiveProjectRequest {
 
 /// Python `datetime.utcnow().isoformat()` -> `2026-05-16T12:34:56.123456`.
 fn utcnow_iso() -> String {
-    chrono::Utc::now().naive_utc().format("%Y-%m-%dT%H:%M:%S%.6f").to_string()
+    chrono::Utc::now()
+        .naive_utc()
+        .format("%Y-%m-%dT%H:%M:%S%.6f")
+        .to_string()
 }
 
 /// SQLAlchemy stores naive datetimes as `YYYY-MM-DD HH:MM:SS[.ffffff]`.
@@ -135,7 +138,9 @@ fn rglob_md(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(d) = stack.pop() {
-        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        let Ok(rd) = std::fs::read_dir(&d) else {
+            continue;
+        };
         for entry in rd.flatten() {
             let p = entry.path();
             if p.is_dir() {
@@ -279,10 +284,8 @@ fn get_merged_config(project_path: Option<&str>) -> Value {
                 for p in rd.flatten().map(|e| e.path()) {
                     if p.extension().and_then(|x| x.to_str()) == Some("md") {
                         if let Some(stem) = p.file_stem() {
-                            agents.push(Value::String(format!(
-                                "project:{}",
-                                stem.to_string_lossy()
-                            )));
+                            agents
+                                .push(Value::String(format!("project:{}", stem.to_string_lossy())));
                         }
                     }
                 }
@@ -440,7 +443,8 @@ async fn discover_projects(Json(req): Json<ProjectDiscoveryRequest>) -> AppResul
     // Phase 2: ~/.claude/projects/ session history
     let global_projects_dir = paths::get_claude_projects_dir();
     if global_projects_dir.exists() {
-        let mut global_entries: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut global_entries: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         if let Ok(rd) = std::fs::read_dir(&global_projects_dir) {
             for entry in rd.flatten() {
                 if entry.path().is_dir() {

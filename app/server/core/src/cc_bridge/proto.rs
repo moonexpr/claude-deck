@@ -9,7 +9,6 @@
 /// BINARY frames:
 ///   Stdin   – client→server raw bytes → pty master write
 ///   Stdout  – server→client raw bytes from pty master read
-
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};

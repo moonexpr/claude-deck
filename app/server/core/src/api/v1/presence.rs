@@ -1,27 +1,27 @@
 // PORTED: presence_service.py + api/v1/presence.py
 
 use axum::{
+    Extension, Json, Router,
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
         Path as AxumPath, State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     http::HeaderMap,
     response::Response,
     routing::{get, patch, post},
-    Extension, Json, Router,
 };
 use chrono::{DateTime, Duration, Utc};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sqlx::sqlite::SqliteRow;
 use sqlx::{Row, SqlitePool};
 use std::sync::Arc;
 use std::sync::OnceLock;
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{Mutex, broadcast};
 
-use axum::response::IntoResponse;
 use crate::api::v1::ApiState;
 use crate::error::{AppError, AppResult};
+use axum::response::IntoResponse;
 
 const IDLE_TIMEOUT_MINUTES: i64 = 15;
 const BUCKET_COUNT: usize = 30;
@@ -247,7 +247,9 @@ fn map_row(r: &SqliteRow) -> SessionRow {
         session_id: r.try_get("session_id").unwrap_or_default(),
         label: r.try_get("label").ok().flatten(),
         project_path: r.try_get("project_path").ok().flatten(),
-        status: r.try_get("status").unwrap_or_else(|_| STATUS_ACTIVE.to_string()),
+        status: r
+            .try_get("status")
+            .unwrap_or_else(|_| STATUS_ACTIVE.to_string()),
         status_text: r.try_get("status_text").ok().flatten(),
         last_narrative: r.try_get("last_narrative").ok().flatten(),
         last_narrative_at: r.try_get("last_narrative_at").ok().flatten(),
@@ -435,7 +437,11 @@ async fn assign_unique_label(
 
     if !existing.is_empty() {
         for (sid,) in &existing {
-            let new_label = format!("{} ({})", base_label, &sid.chars().take(6).collect::<String>());
+            let new_label = format!(
+                "{} ({})",
+                base_label,
+                &sid.chars().take(6).collect::<String>()
+            );
             sqlx::query("UPDATE presence_sessions SET label = ? WHERE session_id = ?")
                 .bind(&new_label)
                 .bind(sid)
@@ -612,7 +618,11 @@ async fn process_event(pool: &SqlitePool, payload: &Value) -> AppResult<Value> {
                     .and_then(|v| v.as_str())
                     .or_else(|| tool_input.get("path").and_then(|v| v.as_str()));
                 if let Some(file_path) = file_path {
-                    let op = if tool_name == "Write" { "created" } else { "modified" };
+                    let op = if tool_name == "Write" {
+                        "created"
+                    } else {
+                        "modified"
+                    };
                     let mut files: Vec<Value> = session
                         .modified_files
                         .as_array()
@@ -756,7 +766,10 @@ async fn receive_event(
 async fn list_sessions(State(state): State<ApiState>) -> AppResult<Json<Value>> {
     ensure_schema(&state.pool).await?;
     let sessions = get_all_sessions(&state.pool).await?;
-    let active = sessions.iter().filter(|s| s.status == STATUS_ACTIVE).count();
+    let active = sessions
+        .iter()
+        .filter(|s| s.status == STATUS_ACTIVE)
+        .count();
     let error = sessions.iter().filter(|s| s.status == STATUS_ERROR).count();
     let total = sessions.len();
     let list: Vec<Value> = sessions.iter().map(row_to_response).collect();
@@ -906,7 +919,11 @@ async fn handle_socket(mut socket: WebSocket, state: ApiState, bc: Arc<PresenceB
     if let Ok(sessions) = get_all_sessions(&state.pool).await {
         for s in &sessions {
             let msg = json!({ "type": "session_update", "session": row_to_response(s) });
-            if socket.send(Message::Text(msg.to_string().into())).await.is_err() {
+            if socket
+                .send(Message::Text(msg.to_string().into()))
+                .await
+                .is_err()
+            {
                 return;
             }
         }

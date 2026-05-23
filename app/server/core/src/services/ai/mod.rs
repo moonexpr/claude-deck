@@ -3,7 +3,6 @@
 /// Module layout:
 ///   anthropic — raw Anthropic Messages API client (streaming + non-streaming)
 ///   proxy     — transform Anthropic SSE events → Vercel Data Stream v1 frames
-
 pub mod anthropic;
 pub mod proxy;
 

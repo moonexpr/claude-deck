@@ -8,7 +8,6 @@
 ///
 /// `anthropic_sse_to_data_stream` consumes an `AnthropicEvent` stream and
 /// emits `Bytes` values that axum can forward to the client chunk by chunk.
-
 use bytes::Bytes;
 use futures::stream::{Stream, StreamExt};
 

@@ -7,17 +7,11 @@ pub mod paths;
 pub mod patterns;
 pub mod services;
 
-use axum::{
-    routing::get,
-    Router,
-    Json,
-    response::IntoResponse,
-    http::StatusCode,
-};
-use sqlx::sqlite::SqlitePoolOptions;
-use tower_http::cors::{CorsLayer, Any};
-use std::path::PathBuf;
+use axum::{Json, Router, http::StatusCode, response::IntoResponse, routing::get};
 use serde::Serialize;
+use sqlx::sqlite::SqlitePoolOptions;
+use std::path::PathBuf;
+use tower_http::cors::{Any, CorsLayer};
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -59,24 +53,24 @@ pub struct ServerConfig {
 /// Falls back to `application/octet-stream` for anything else.
 fn ext_to_mime(ext: &str) -> &'static str {
     match ext {
-        "html" | "htm"  => "text/html; charset=utf-8",
-        "js" | "mjs"    => "application/javascript",
-        "css"           => "text/css",
-        "json"          => "application/json",
-        "svg"           => "image/svg+xml",
-        "png"           => "image/png",
-        "jpg" | "jpeg"  => "image/jpeg",
-        "gif"           => "image/gif",
-        "ico"           => "image/x-icon",
-        "webp"          => "image/webp",
-        "woff"          => "font/woff",
-        "woff2"         => "font/woff2",
-        "ttf"           => "font/ttf",
-        "otf"           => "font/otf",
-        "txt"           => "text/plain; charset=utf-8",
-        "xml"           => "application/xml",
-        "wasm"          => "application/wasm",
-        _               => "application/octet-stream",
+        "html" | "htm" => "text/html; charset=utf-8",
+        "js" | "mjs" => "application/javascript",
+        "css" => "text/css",
+        "json" => "application/json",
+        "svg" => "image/svg+xml",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "ico" => "image/x-icon",
+        "webp" => "image/webp",
+        "woff" => "font/woff",
+        "woff2" => "font/woff2",
+        "ttf" => "font/ttf",
+        "otf" => "font/otf",
+        "txt" => "text/plain; charset=utf-8",
+        "xml" => "application/xml",
+        "wasm" => "application/wasm",
+        _ => "application/octet-stream",
     }
 }
 
@@ -149,7 +143,18 @@ pub async fn app(config: ServerConfig) -> anyhow::Result<axum::Router> {
     // Build our application
     let mut router = Router::new()
         .route("/health", get(health))
-        .nest("/api/v1", api::v1::router(pool, config.projects_dir, config.presence_public_url, config.enable_external_tools, config.cwd_fallback, config.anthropic_api_key, config.anthropic_base_url))
+        .nest(
+            "/api/v1",
+            api::v1::router(
+                pool,
+                config.projects_dir,
+                config.presence_public_url,
+                config.enable_external_tools,
+                config.cwd_fallback,
+                config.anthropic_api_key,
+                config.anthropic_base_url,
+            ),
+        )
         .layer(cors);
 
     // Mount static frontend serving only when a dist path was supplied.
@@ -193,10 +198,7 @@ pub async fn app(config: ServerConfig) -> anyhow::Result<axum::Router> {
                     match tokio::fs::read(&candidate).await {
                         Ok(bytes) => {
                             let mime = ext_to_mime(
-                                candidate
-                                    .extension()
-                                    .and_then(|e| e.to_str())
-                                    .unwrap_or(""),
+                                candidate.extension().and_then(|e| e.to_str()).unwrap_or(""),
                             );
                             (
                                 StatusCode::OK,

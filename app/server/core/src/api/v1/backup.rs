@@ -15,15 +15,15 @@
 //  architect must add `zip = "2"` to backend/Cargo.toml.)
 
 use axum::{
+    Router,
     body::Body,
     extract::{Json, Path, Query, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::Response,
     routing::{get, post},
-    Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::io::{Read, Write};
 use std::path::{Path as FsPath, PathBuf};
 
@@ -201,11 +201,7 @@ fn get_claude_code_version() -> Option<String> {
         .ok()?;
     if out.status.success() {
         let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if s.is_empty() {
-            None
-        } else {
-            Some(s)
-        }
+        if s.is_empty() { None } else { Some(s) }
     } else {
         None
     }
@@ -515,9 +511,7 @@ fn generate_manifest(paths_list: &[PathBuf], scope: &str) -> Value {
         }
         for cmd_file in md_files {
             match cmd_file.strip_prefix(&commands_dir) {
-                Ok(rel) => {
-                    commands.push(Value::String(rel.to_string_lossy().replace(".md", "")))
-                }
+                Ok(rel) => commands.push(Value::String(rel.to_string_lossy().replace(".md", ""))),
                 Err(_) => {
                     if let Some(stem) = cmd_file.file_stem() {
                         commands.push(Value::String(stem.to_string_lossy().into_owned()));
@@ -595,7 +589,8 @@ fn create_archive(
             .map_err(|e| AppError::internal(e.to_string()))?;
     }
 
-    zip.finish().map_err(|e| AppError::internal(e.to_string()))?;
+    zip.finish()
+        .map_err(|e| AppError::internal(e.to_string()))?;
 
     let size_bytes = std::fs::metadata(&archive_path)
         .map(|m| m.len() as i64)
@@ -845,9 +840,8 @@ async fn get_backup_manifest(
     let backup = fetch_backup(&state.pool, backup_id)
         .await?
         .ok_or_else(|| AppError::not_found("Backup not found"))?;
-    let manifest = get_manifest_from_backup(&backup.file_path).ok_or_else(|| {
-        AppError::not_found("Manifest not found in backup (older backup format)")
-    })?;
+    let manifest = get_manifest_from_backup(&backup.file_path)
+        .ok_or_else(|| AppError::not_found("Manifest not found in backup (older backup format)"))?;
     Ok(Json(manifest))
 }
 
@@ -1022,7 +1016,7 @@ async fn validate_backup(
         None => {
             return Ok(Json(
                 json!({ "valid": false, "issues": ["Backup not found"] }),
-            ))
+            ));
         }
     };
 
@@ -1040,7 +1034,7 @@ async fn validate_backup(
         Err(_) => {
             return Ok(Json(
                 json!({ "valid": false, "issues": ["Backup file is corrupted"] }),
-            ))
+            ));
         }
     };
     let mut zip = match zip::ZipArchive::new(file) {
@@ -1048,7 +1042,7 @@ async fn validate_backup(
         Err(_) => {
             return Ok(Json(
                 json!({ "valid": false, "issues": ["Backup file is corrupted"] }),
-            ))
+            ));
         }
     };
 
@@ -1070,7 +1064,7 @@ async fn validate_backup(
             Err(_) => {
                 return Ok(Json(
                     json!({ "valid": false, "issues": ["Backup file is corrupted"] }),
-                ))
+                ));
             }
         }
     }
@@ -1473,7 +1467,7 @@ async fn install_dependencies(
                 "installed": [],
                 "failed": [],
                 "logs": "",
-            })))
+            })));
         }
     };
 
@@ -1486,7 +1480,7 @@ async fn install_dependencies(
                 "installed": [],
                 "failed": [],
                 "logs": "",
-            })))
+            })));
         }
     };
 

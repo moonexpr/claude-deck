@@ -13,7 +13,6 @@
 ///   health, status, agents, ai, backup, cc_bridge, cli, commands, config,
 ///   context, hooks, mcp, memory, output_styles, permissions, plans, plugins,
 ///   presence, projects, sessions, statusline, usage
-
 use axum::body::Body;
 use http_body_util::BodyExt;
 use tower::ServiceExt;
@@ -23,10 +22,7 @@ use tower::ServiceExt;
 // ---------------------------------------------------------------------------
 
 fn make_config(tmp: &std::path::Path) -> server_core::ServerConfig {
-    let db_url = format!(
-        "sqlite:{}?mode=rwc",
-        tmp.join("test.db").display()
-    );
+    let db_url = format!("sqlite:{}?mode=rwc", tmp.join("test.db").display());
     server_core::ServerConfig {
         db_url,
         projects_dir: tmp.join("projects"),
@@ -131,8 +127,16 @@ async fn all_route_families_mounted_and_respond() {
             .header("content-type", "application/json")
             .body(Body::from(r#"{"messages":[]}"#))
             .unwrap();
-        let resp = router.clone().oneshot(req).await.expect("POST /api/v1/ai/chat");
-        assert_eq!(resp.status().as_u16(), 503, "POST /api/v1/ai/chat should be 503 (no key)");
+        let resp = router
+            .clone()
+            .oneshot(req)
+            .await
+            .expect("POST /api/v1/ai/chat");
+        assert_eq!(
+            resp.status().as_u16(),
+            503,
+            "POST /api/v1/ai/chat should be 503 (no key)"
+        );
     }
 
     // ---- backup: GET /api/v1/backup/list → 200 -----------------------------
@@ -157,7 +161,11 @@ async fn all_route_families_mounted_and_respond() {
             .header("content-type", "application/json")
             .body(Body::from(r#"{"command":"mcp","args":[]}"#))
             .unwrap();
-        let resp = router.clone().oneshot(req).await.expect("POST /api/v1/cli/execute");
+        let resp = router
+            .clone()
+            .oneshot(req)
+            .await
+            .expect("POST /api/v1/cli/execute");
         let code = resp.status().as_u16();
         // Acceptable: 200 (ran), 422 (validation), 500 only if genuinely broken.
         // The route must at minimum be mounted (not 404).
@@ -310,7 +318,9 @@ async fn spa_fallback_returns_200_for_client_routes() {
         enable_external_tools: false,
         cwd_fallback: tmp.clone(),
     };
-    let router = server_core::app(config).await.expect("server_core::app failed");
+    let router = server_core::app(config)
+        .await
+        .expect("server_core::app failed");
 
     // GET / → 200 (index.html)
     let code = get(&router, "/").await;

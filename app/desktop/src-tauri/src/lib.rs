@@ -28,8 +28,8 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             // ---- Step 1: bind synchronously on an OS-assigned port ----------
-            let std_listener = TcpListener::bind("127.0.0.1:0")
-                .expect("failed to bind embedded server listener");
+            let std_listener =
+                TcpListener::bind("127.0.0.1:0").expect("failed to bind embedded server listener");
             std_listener
                 .set_nonblocking(true)
                 .expect("failed to set non-blocking on listener");
@@ -49,8 +49,7 @@ pub fn run() {
                 .app_data_dir()
                 .expect("failed to resolve app_data_dir");
             if !app_data_dir.exists() {
-                std::fs::create_dir_all(&app_data_dir)
-                    .expect("failed to create app_data_dir");
+                std::fs::create_dir_all(&app_data_dir).expect("failed to create app_data_dir");
             }
 
             let db_path = app_data_dir.join("claude_registry.db");

@@ -8,14 +8,13 @@
 ///
 /// Same-origin parity with cc-bridge; auth hardening tracked in
 /// docs/requests/INBOX.md
-
 use axum::{
+    Json, Router,
     body::Body,
     extract::State,
     http::{HeaderMap, Response, StatusCode},
     response::IntoResponse,
     routing::post,
-    Json, Router,
 };
 use bytes::Bytes;
 use futures::StreamExt;
@@ -24,7 +23,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::v1::ApiState;
 use crate::cc_bridge::is_same_origin;
-use crate::services::ai::{anthropic, proxy, Message};
+use crate::services::ai::{Message, anthropic, proxy};
 
 // ---------------------------------------------------------------------------
 // Request / response types
@@ -147,22 +146,15 @@ async fn post_chat(
     let base_url = state.anthropic_base_url.clone();
     let model = req.model.clone();
 
-    let event_stream = match anthropic::stream_messages(
-        client,
-        base_url,
-        api_key,
-        model,
-        req.messages,
-    )
-    .await
-    {
-        Ok(s) => s,
-        Err(e) => return upstream_error_response(&e.to_string()),
-    };
+    let event_stream =
+        match anthropic::stream_messages(client, base_url, api_key, model, req.messages).await {
+            Ok(s) => s,
+            Err(e) => return upstream_error_response(&e.to_string()),
+        };
 
     // Transform Anthropic SSE events → Vercel Data Stream frames.
-    let data_stream =
-        proxy::anthropic_sse_to_data_stream(event_stream).map(Ok::<Bytes, std::convert::Infallible>);
+    let data_stream = proxy::anthropic_sse_to_data_stream(event_stream)
+        .map(Ok::<Bytes, std::convert::Infallible>);
     let body = Body::from_stream(data_stream);
 
     Response::builder()
@@ -197,15 +189,7 @@ async fn post_suggest(
     let base_url = state.anthropic_base_url.clone();
     let model = req.model.clone();
 
-    match anthropic::complete_messages(
-        client,
-        base_url,
-        api_key,
-        model,
-        req.messages,
-    )
-    .await
-    {
+    match anthropic::complete_messages(client, base_url, api_key, model, req.messages).await {
         Ok((text, usage)) => {
             let resp = SuggestResponse {
                 text,

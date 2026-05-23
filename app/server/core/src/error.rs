@@ -6,9 +6,9 @@
 //! errors yields a 500 with the error string as `detail`, matching the
 //! Python `except Exception as e: raise HTTPException(500, str(e))` pattern.
 
+use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use serde_json::json;
 
 #[derive(Debug)]
@@ -19,7 +19,10 @@ pub struct AppError {
 
 impl AppError {
     pub fn new(status: StatusCode, detail: impl Into<String>) -> Self {
-        Self { status, detail: detail.into() }
+        Self {
+            status,
+            detail: detail.into(),
+        }
     }
     pub fn internal(detail: impl Into<String>) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, detail)
