@@ -45,7 +45,7 @@ Post-Phase-B fixes from the PROMPTER's hands-on tailnet review: `server-bin` `FR
 **Execution order:** C1 → C2 → C3 → ‖ C4 ‖ C5 ‖ C6 ‖. C4/C5/C6 are a parallel wave (disjoint feature dirs).
 
 - ✅ **C1** Server AI proxy — `/api/v1/ai/chat` (streaming Vercel Data-Stream) + `/suggest` (single-shot). reqwest + eventsource-stream → Anthropic Messages API. Integration tests 3/3 green. — `beed898` (service layer + `ServerConfig.anthropic_base_url`) · `60d7372` (handlers) · `d178132` (3 integration tests)
-- ⬜ **C2** Tauri keyring → `ServerConfig.anthropic_api_key`. Raw `keyring` crate (no plugin). — `timothy`
+- ✅ **C2** Tauri keyring → `ServerConfig.anthropic_api_key`. Raw `keyring` crate. `read_anthropic_key()` helper in `app/desktop/src-tauri/src/keychain.rs` — NoEntry/empty/error → `None`, never panics, never logs the key. — `e5da9d0`
 - ⬜ **C3** Chat panel feature + first `sqlx::migrate!` (migration `0001_chat_conversations.sql`, single table, messages as JSON-as-TEXT). — `isaiah` + `david`
 - ⬜ **C4** cc-bridge AI augmentation — split-pane terminal+AI, inline preview with [Send]/[Edit]/[Discard], zero auto-exec. — `isaiah` + `john`
 - ⬜ **C5** AI-assisted config editing — Agents page template + reusable `AI_SUGGEST_PATTERN.md`. — `david` + `isaiah`
