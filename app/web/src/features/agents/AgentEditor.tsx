@@ -27,6 +27,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ChevronDown, Wrench, Shield, BookOpen, HardDrive, X } from "lucide-react";
+import { AISuggestBlock } from "./AISuggestBlock";
 import {
   type Agent,
   type AgentUpdate,
@@ -397,7 +398,13 @@ export function AgentEditor({
 
           {/* System Prompt */}
           <div className="space-y-2">
-            <Label>System Prompt</Label>
+            <div className="flex items-center justify-between">
+              <Label>System Prompt</Label>
+              <AISuggestBlock
+                currentValue={prompt}
+                onAccept={setPrompt}
+              />
+            </div>
             <MarkdownPreviewToggle
               value={prompt}
               onChange={setPrompt}
