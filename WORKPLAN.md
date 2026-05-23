@@ -51,7 +51,11 @@ Post-Phase-B fixes from the PROMPTER's hands-on tailnet review: `server-bin` `FR
   - ✅ C3b frontend — `a61f89b` (types/api) · `98d8bf2` (list/transcript) · `abdbf56` (page + useChat) · `a7f5a16` (registry) · `d9db425` (Playwright). 40/40 e2e green.
 - ✅ **C4** cc-bridge AI augmentation — split-pane + `parseExecuteTags` + AISuggestPanel + zero-PTY-bytes-pre-Send Playwright gate. — `fb680c4` (parser+7 unit tests) · `fdda126` (panel) · `2cdc762` (split-pane) · `8de93c5` (gate test, 6/6 green)
 - ✅ **C5** Agents AI-suggest template + `AI_SUGGEST_PATTERN.md`. — `3ed7e01` (component) · `48a2d72` (mount) · `a93db5d` (pattern doc)
-- 🔵 **C6** Redirected per PROMPTER 2026-05-23: MCP/Permissions use structured forms (no editable JSON to swap). Repurposed to the open INBOX item: CM6 for **read-only** Config-viewer JSON (`features/config/ConfigFileViewer.tsx`). — `david`
+- ✅ **C6** (redirected) — CM6 read-only for Config viewer + ScopeResolver. `CodeEditor` extended with `readOnly` prop using `EditorState.readOnly.of(true)` + `EditorView.editable.of(false)` (selection/copy still work). INBOX entry closed. — `0390589` · `8e6db4b` · `802c40e`
+
+**Closure (gate cleanup):** dev-ai A7 stub deleted — `2832387`.
+
+**Phase C gate — ✅ 7 / 7 — PHASE C COMPLETE:** ✅(1) `useChat` streams; only diagnostic strings reference `x-api-key`/`ANTHROPIC_API_KEY` in client (no transmissions) · ✅(2) Tauri keyring path wired via `app/desktop/src-tauri/src/keychain.rs` (manual smoke per design) · ✅(3) stub `<execute>` → zero PTY bytes pre-Send (C4 e2e gate `cc-bridge-ai.spec.ts` 6/6) · ✅(4) Agents AI-suggest → CM6 → existing `PUT /api/v1/agents/...` round-trip (C5 e2e + manual smoke) · ✅(5) `sqlx::migrate!` applies cleanly to fresh DB (C3a `migration_creates_table`); data-loss on existing DBs permitted per PROMPTER policy · ✅(6) Playwright sweep 54/54 green across 24 spec files · ✅(7) `git diff main -- backend/ frontend/` = 0 lines.
 
 **Phase C gate (7):** (1) `useChat` streams, no `x-api-key` in browser · (2) Tauri keyring path works offline-after-key · (3) stub `<execute>` → zero PTY bytes pre-Send · (4) Agents AI-suggest → CM6 → PUT round-trip · (5) `sqlx::migrate!` applies cleanly to a fresh DB (data-loss explicitly permitted on existing DBs per PROMPTER policy 2026-05-22) · (6) Playwright sweep ≥65/65 · (7) `git diff main -- backend/ frontend/` empty.
 
