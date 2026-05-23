@@ -1,13 +1,13 @@
-/// AI proxy handlers — Phase C, task C1.
+/// AI proxy handlers — Phase C, task C1; rewired in D7 to consume a
+/// `KeyProvider` instead of a bare `Option<String>`. Two credential paths
+/// flow through the same handler shape: `api_key` (existing) and `oauth`
+/// (D7 — observed by `claudecode_ext` from a live Claude Code session).
 ///
 /// POST /api/v1/ai/chat    — streaming chat via Vercel Data Stream Protocol v1
 /// POST /api/v1/ai/suggest — single-shot non-streaming suggestion
 ///
-/// Security: same-origin check reused from cc_bridge (see note below).
-/// Key source: `ApiState.anthropic_api_key` only — never std::env.
-///
-/// Same-origin parity with cc-bridge; auth hardening tracked in
-/// docs/requests/INBOX.md
+/// Security: same-origin check reused from cc_bridge.
+/// Credential source: `ApiState.key_provider` only — never std::env.
 use axum::{
     Json, Router,
     body::Body,
@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::v1::ApiState;
 use crate::cc_bridge::is_same_origin;
+use crate::services::ai::key_provider::{AuthCredential, KeyProvider};
 use crate::services::ai::{Message, anthropic, proxy};
 
 // ---------------------------------------------------------------------------
@@ -100,15 +101,39 @@ fn forbidden_response() -> Response<Body> {
     (StatusCode::FORBIDDEN, Json(body)).into_response()
 }
 
-fn no_key_response() -> Response<Body> {
+fn no_key_response(label: Option<&str>) -> Response<Body> {
+    let detail = match label {
+        Some("oauth") => "no observed Claude Code OAuth bearer (launch claude via claude_ext)".to_string(),
+        Some("api_key") => "anthropic_api_key not configured".to_string(),
+        Some(other) => format!("credential source {other:?} returned no usable credential"),
+        None => "no credential source configured".to_string(),
+    };
     let body = ErrorBody {
         status: "unavailable",
-        detail: "anthropic_api_key not configured".to_string(),
+        detail,
         anthropic_key_configured: Some(false),
-        key_source: Some(serde_json::Value::Null),
+        key_source: Some(match label {
+            Some(s) => serde_json::Value::String(s.to_string()),
+            None => serde_json::Value::Null,
+        }),
         status_code: None,
     };
     (StatusCode::SERVICE_UNAVAILABLE, Json(body)).into_response()
+}
+
+/// Resolve the per-request credential from the configured provider.
+/// Returns `Err(Response)` already populated when no credential is
+/// available — the caller can early-return that.
+async fn resolve_credential(
+    provider: &Option<std::sync::Arc<dyn KeyProvider>>,
+) -> Result<AuthCredential, Response<Body>> {
+    match provider {
+        None => Err(no_key_response(None)),
+        Some(p) => match p.current_credential().await {
+            Some(c) => Ok(c),
+            None => Err(no_key_response(Some(p.label()))),
+        },
+    }
 }
 
 /// Origin required for all state-changing requests; aligns with cc-bridge WS policy.
@@ -139,9 +164,9 @@ async fn post_chat(
         return forbidden_response();
     }
 
-    let api_key = match &state.anthropic_api_key {
-        Some(k) => k.clone(),
-        None => return no_key_response(),
+    let auth = match resolve_credential(&state.key_provider).await {
+        Ok(c) => c,
+        Err(resp) => return resp,
     };
 
     let client = Client::new();
@@ -149,7 +174,7 @@ async fn post_chat(
     let model = req.model.clone();
 
     let event_stream =
-        match anthropic::stream_messages(client, base_url, api_key, model, req.messages).await {
+        match anthropic::stream_messages(client, base_url, auth, model, req.messages).await {
             Ok(s) => s,
             Err(e) => return upstream_error_response(&e.to_string()),
         };
@@ -182,16 +207,16 @@ async fn post_suggest(
         return forbidden_response();
     }
 
-    let api_key = match &state.anthropic_api_key {
-        Some(k) => k.clone(),
-        None => return no_key_response(),
+    let auth = match resolve_credential(&state.key_provider).await {
+        Ok(c) => c,
+        Err(resp) => return resp,
     };
 
     let client = Client::new();
     let base_url = state.anthropic_base_url.clone();
     let model = req.model.clone();
 
-    match anthropic::complete_messages(client, base_url, api_key, model, req.messages).await {
+    match anthropic::complete_messages(client, base_url, auth, model, req.messages).await {
         Ok((text, usage)) => {
             let resp = SuggestResponse {
                 text,

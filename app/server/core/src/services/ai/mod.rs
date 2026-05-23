@@ -1,9 +1,11 @@
 /// AI service layer: Anthropic API client and Vercel Data Stream proxy.
 ///
 /// Module layout:
-///   anthropic — raw Anthropic Messages API client (streaming + non-streaming)
-///   proxy     — transform Anthropic SSE events → Vercel Data Stream v1 frames
+///   anthropic    — raw Anthropic Messages API client (streaming + non-streaming)
+///   proxy        — transform Anthropic SSE events → Vercel Data Stream v1 frames
+///   key_provider — credential abstraction (D7); ai.rs asks here per request
 pub mod anthropic;
+pub mod key_provider;
 pub mod proxy;
 
 /// The role of a chat message.

@@ -7,17 +7,60 @@ pub mod paths;
 pub mod patterns;
 pub mod services;
 
+/// Re-exported so `server-bin` and the Tauri build can construct
+/// `Config` instances without adding their own direct dep.
+pub use claudecode_ext_core;
+
 use axum::{Json, Router, http::StatusCode, response::IntoResponse, routing::get};
 use serde::Serialize;
 use sqlx::sqlite::SqlitePoolOptions;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
+
+use crate::services::ai::key_provider::{
+    ApiKeyProvider, ClaudeCodeOAuthProvider, KeyProvider,
+};
 
 #[derive(Serialize)]
 struct HealthResponse {
     name: String,
     version: String,
     status: String,
+}
+
+/// Where the AI handlers get their credential from. Resolved by `app()` into
+/// a `KeyProvider` impl that `ai.rs` calls per request.
+///
+/// Variants:
+///   - `None`             — no credential; `ai.rs` returns 503.
+///   - `ApiKey(String)`   — sk-ant-… key. Sent as `x-api-key`.
+///   - `ClaudeCodeOAuth`  — spawn the claudecode_ext framework, observe
+///                          Claude Code's bearer, send as `Authorization: Bearer`.
+///   - `Custom(...)`      — caller-supplied `KeyProvider`. Used by tests to
+///                          inject a stub that returns a specific credential
+///                          variant; production code does not construct this.
+#[derive(Clone)]
+pub enum KeySource {
+    None,
+    ApiKey(String),
+    ClaudeCodeOAuth {
+        config: claudecode_ext_core::Config,
+    },
+    Custom(Arc<dyn KeyProvider>),
+}
+
+impl std::fmt::Debug for KeySource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            KeySource::None => write!(f, "KeySource::None"),
+            KeySource::ApiKey(_) => write!(f, "KeySource::ApiKey(<elided>)"),
+            KeySource::ClaudeCodeOAuth { .. } => {
+                write!(f, "KeySource::ClaudeCodeOAuth {{ .. }}")
+            }
+            KeySource::Custom(p) => write!(f, "KeySource::Custom({})", p.label()),
+        }
+    }
 }
 
 /// Configuration supplied by the embedder (or `server-bin`). All env/process
@@ -32,8 +75,8 @@ pub struct ServerConfig {
     pub frontend_dist_path: Option<PathBuf>,
     /// Override base URL for presence event hooks (e.g. `https://deck.example.com`).
     pub presence_public_url: Option<String>,
-    /// Anthropic API key — used by the AI proxy handlers.
-    pub anthropic_api_key: Option<String>,
+    /// Credential source for the AI proxy handlers.
+    pub key_source: KeySource,
     /// Base URL for the Anthropic API. Defaults to `https://api.anthropic.com`.
     /// Override in tests to point at a wiremock server.
     pub anthropic_base_url: String,
@@ -140,6 +183,30 @@ pub async fn app(config: ServerConfig) -> anyhow::Result<axum::Router> {
         .allow_methods(Any)
         .allow_headers(Any);
 
+    // Resolve KeySource → KeyProvider. For OAuth, this spawns the
+    // claudecode_ext framework (binds the local TLS-MITM proxy, generates
+    // CA if needed, writes discovery file). The Handle lives inside the
+    // ClaudeCodeOAuthProvider Arc and is kept alive by ApiState clones.
+    //
+    // Lifecycle note: on app shutdown we currently rely on the tokio
+    // runtime tearing down the proxy task — no explicit cleanup path yet.
+    let key_provider: Option<Arc<dyn KeyProvider>> = match config.key_source {
+        KeySource::None => None,
+        KeySource::ApiKey(k) => Some(Arc::new(ApiKeyProvider::new(k))),
+        KeySource::ClaudeCodeOAuth { config: ext_config } => {
+            tracing::info!("starting claudecode_ext framework for OAuth credential source");
+            let handle = Arc::new(claudecode_ext_core::start(ext_config).await?);
+            tracing::info!(
+                proxy_addr = %handle.proxy_addr(),
+                ca_cert_path = %handle.ca_cert_path().display(),
+                discovery_path = %handle.discovery_path().display(),
+                "claudecode_ext started",
+            );
+            Some(Arc::new(ClaudeCodeOAuthProvider::new(handle)))
+        }
+        KeySource::Custom(p) => Some(p),
+    };
+
     // Build our application
     let mut router = Router::new()
         .route("/health", get(health))
@@ -151,7 +218,7 @@ pub async fn app(config: ServerConfig) -> anyhow::Result<axum::Router> {
                 config.presence_public_url,
                 config.enable_external_tools,
                 config.cwd_fallback,
-                config.anthropic_api_key,
+                key_provider,
                 config.anthropic_base_url,
             ),
         )

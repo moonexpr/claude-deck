@@ -62,14 +62,21 @@ pub fn run() {
 
             let cwd_fallback = app_data_dir.clone();
 
-            let anthropic_api_key = keychain::read_anthropic_key();
+            // D7: KeySource replaces the bare Option<String>. v1 preserves
+            // the pre-D7 behavior for Tauri — read the keychain entry that
+            // existed before. Switching to ClaudeCodeOAuth is a UI choice
+            // we'll wire as part of D8 (Tauri command + settings surface).
+            let key_source = match keychain::read_anthropic_key() {
+                Some(k) => server_core::KeySource::ApiKey(k),
+                None => server_core::KeySource::None,
+            };
 
             let config = server_core::ServerConfig {
                 db_url,
                 projects_dir,
                 frontend_dist_path: None, // Tauri serves the UI; server is API-only
                 presence_public_url: None,
-                anthropic_api_key,
+                key_source,
                 anthropic_base_url: "https://api.anthropic.com".to_string(),
                 enable_external_tools: true,
                 cwd_fallback,

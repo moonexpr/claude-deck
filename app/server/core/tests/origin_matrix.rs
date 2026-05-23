@@ -52,7 +52,7 @@ async fn make_router() -> axum::Router {
         projects_dir: tmp.join("projects"),
         frontend_dist_path: None,
         presence_public_url: None,
-        anthropic_api_key: None, // causes 503 on AI routes — that's acceptable
+        key_source: server_core::KeySource::None, // causes 503 on AI routes — that's acceptable
         anthropic_base_url: "https://api.anthropic.com".to_string(),
         enable_external_tools: false,
         cwd_fallback: tmp,

@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use anyhow::Context;
-use server_core::{ServerConfig, app};
+use server_core::{KeySource, ServerConfig, app, claudecode_ext_core};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -39,7 +39,30 @@ async fn main() -> anyhow::Result<()> {
 
     let presence_public_url: Option<String> = std::env::var("PRESENCE_PUBLIC_URL").ok();
 
-    let anthropic_api_key: Option<String> = std::env::var("ANTHROPIC_API_KEY").ok();
+    // Credential resolution:
+    //   CLAUDECODE_EXT_KEY_SOURCE=oauth → KeySource::ClaudeCodeOAuth (spawn
+    //       the claudecode_ext framework; no API key needed). Bearer comes
+    //       from observing Claude Code's outbound traffic.
+    //   otherwise                       → ANTHROPIC_API_KEY env (existing).
+    //                                     Absent → KeySource::None (AI proxy
+    //                                     handlers return 503).
+    let key_source: KeySource = match std::env::var("CLAUDECODE_EXT_KEY_SOURCE")
+        .ok()
+        .as_deref()
+    {
+        Some("oauth") => {
+            tracing::info!(
+                "key_source=oauth — claudecode_ext framework will be spawned at app init",
+            );
+            KeySource::ClaudeCodeOAuth {
+                config: claudecode_ext_core_config_from_env(),
+            }
+        }
+        _ => match std::env::var("ANTHROPIC_API_KEY").ok() {
+            Some(k) if !k.is_empty() => KeySource::ApiKey(k),
+            _ => KeySource::None,
+        },
+    };
 
     let anthropic_base_url: String = std::env::var("ANTHROPIC_BASE_URL")
         .unwrap_or_else(|_| "https://api.anthropic.com".to_string());
@@ -77,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
         projects_dir,
         frontend_dist_path,
         presence_public_url,
-        anthropic_api_key,
+        key_source,
         anthropic_base_url,
         enable_external_tools,
         cwd_fallback,
@@ -96,4 +119,24 @@ async fn main() -> anyhow::Result<()> {
         .context("server error")?;
 
     Ok(())
+}
+
+/// Optional overrides for the claudecode_ext framework, via env vars:
+///   CLAUDECODE_EXT_BIND          (default 127.0.0.1:0 — ephemeral)
+///   CLAUDECODE_EXT_CA_DIR        (default ~/.claudecode_ext/ca)
+///   CLAUDECODE_EXT_DISCOVERY     (default ~/.claudecode_ext/proxy.sock)
+fn claudecode_ext_core_config_from_env() -> claudecode_ext_core::Config {
+    let mut cfg = claudecode_ext_core::Config::default();
+    if let Ok(b) = std::env::var("CLAUDECODE_EXT_BIND")
+        && let Ok(parsed) = b.parse()
+    {
+        cfg.bind = parsed;
+    }
+    if let Ok(d) = std::env::var("CLAUDECODE_EXT_CA_DIR") {
+        cfg.ca_dir = PathBuf::from(d);
+    }
+    if let Ok(d) = std::env::var("CLAUDECODE_EXT_DISCOVERY") {
+        cfg.discovery_path = PathBuf::from(d);
+    }
+    cfg
 }
