@@ -323,17 +323,14 @@ fn read_user_mcp_config(project_path: Option<&str>) -> Map<String, Value> {
             servers.insert(k.clone(), v.clone());
         }
     }
-    if let Some(pp) = project_path {
-        if let Some(projects) = config.get("projects").and_then(|v| v.as_object()) {
-            if let Some(pc) = projects.get(pp) {
-                if let Some(s) = pc.get("mcpServers").and_then(|v| v.as_object()) {
+    if let Some(pp) = project_path
+        && let Some(projects) = config.get("projects").and_then(|v| v.as_object())
+            && let Some(pc) = projects.get(pp)
+                && let Some(s) = pc.get("mcpServers").and_then(|v| v.as_object()) {
                     for (k, v) in s {
                         servers.insert(k.clone(), v.clone());
                     }
                 }
-            }
-        }
-    }
     servers
 }
 
@@ -403,8 +400,8 @@ fn read_plugin_mcp_servers() -> Vec<PluginServer> {
         let mut mcp_servers: Map<String, Value> = Map::new();
 
         // .mcp.json (legacy/flat)
-        if let Some(pmc) = read_json_file(&install_path.join(".mcp.json")) {
-            if let Some(o) = pmc.as_object() {
+        if let Some(pmc) = read_json_file(&install_path.join(".mcp.json"))
+            && let Some(o) = pmc.as_object() {
                 if let Some(inner) = o.get("mcpServers").and_then(|v| v.as_object()) {
                     for (k, v) in inner {
                         mcp_servers.insert(k.clone(), v.clone());
@@ -415,12 +412,11 @@ fn read_plugin_mcp_servers() -> Vec<PluginServer> {
                     }
                 }
             }
-        }
 
         // .claude-plugin/plugin.json -> mcpServers
         let plugin_json_path = install_path.join(".claude-plugin").join("plugin.json");
-        if let Some(pj) = read_json_file(&plugin_json_path) {
-            if let Some(msv) = pj.get("mcpServers") {
+        if let Some(pj) = read_json_file(&plugin_json_path)
+            && let Some(msv) = pj.get("mcpServers") {
                 if let Some(obj) = msv.as_object() {
                     for (k, v) in obj {
                         mcp_servers.insert(k.clone(), v.clone());
@@ -436,22 +432,20 @@ fn read_plugin_mcp_servers() -> Vec<PluginServer> {
                             .unwrap_or_else(|_| install_path.clone());
                         let prefix = format!("{}/", install_canon.to_string_lossy());
                         if ref_path.to_string_lossy().starts_with(&prefix) {
-                            if let Some(rd) = read_json_file(&ref_path) {
-                                if let Some(inner) =
+                            if let Some(rd) = read_json_file(&ref_path)
+                                && let Some(inner) =
                                     rd.get("mcpServers").and_then(|v| v.as_object())
                                 {
                                     for (k, v) in inner {
                                         mcp_servers.insert(k.clone(), v.clone());
                                     }
                                 }
-                            }
                         } else {
                             continue;
                         }
                     }
                 }
             }
-        }
 
         if mcp_servers.is_empty() {
             continue;
@@ -501,15 +495,14 @@ async fn write_project_mcp_config(
 fn get_disabled_servers() -> std::collections::HashSet<String> {
     let config = read_json_file(&paths::get_claude_user_settings_file());
     let mut set = std::collections::HashSet::new();
-    if let Some(config) = config {
-        if let Some(arr) = config.get("disabledMcpServers").and_then(|v| v.as_array()) {
+    if let Some(config) = config
+        && let Some(arr) = config.get("disabledMcpServers").and_then(|v| v.as_array()) {
             for v in arr {
                 if let Some(s) = v.as_str() {
                     set.insert(s.to_string());
                 }
             }
         }
-    }
     set
 }
 
@@ -755,21 +748,18 @@ async fn build_server_list(
             s["resource_count"] = json!(c.resource_count);
             s["prompt_count"] = json!(c.prompt_count);
             s["capabilities"] = c.capabilities.unwrap_or(Value::Null);
-            if let Some(t) = c.tools {
-                if !matches!(&t, Value::Array(a) if a.is_empty()) {
+            if let Some(t) = c.tools
+                && !matches!(&t, Value::Array(a) if a.is_empty()) {
                     s["tools"] = t;
                 }
-            }
-            if let Some(r) = c.resources {
-                if !matches!(&r, Value::Array(a) if a.is_empty()) {
+            if let Some(r) = c.resources
+                && !matches!(&r, Value::Array(a) if a.is_empty()) {
                     s["resources"] = r;
                 }
-            }
-            if let Some(p) = c.prompts {
-                if !matches!(&p, Value::Array(a) if a.is_empty()) {
+            if let Some(p) = c.prompts
+                && !matches!(&p, Value::Array(a) if a.is_empty()) {
                     s["prompts"] = p;
                 }
-            }
         }
     }
 
@@ -930,31 +920,26 @@ async fn create_mcp_server(
 
     let mut config = Map::new();
     config.insert("type".into(), json!(server.type_));
-    if let Some(c) = &server.command {
-        if !c.is_empty() {
+    if let Some(c) = &server.command
+        && !c.is_empty() {
             config.insert("command".into(), json!(c));
         }
-    }
-    if let Some(a) = &server.args {
-        if !a.is_empty() {
+    if let Some(a) = &server.args
+        && !a.is_empty() {
             config.insert("args".into(), json!(a));
         }
-    }
-    if let Some(u) = &server.url {
-        if !u.is_empty() {
+    if let Some(u) = &server.url
+        && !u.is_empty() {
             config.insert("url".into(), json!(u));
         }
-    }
-    if let Some(h) = &server.headers {
-        if !h.is_empty() {
+    if let Some(h) = &server.headers
+        && !h.is_empty() {
             config.insert("headers".into(), json!(h));
         }
-    }
-    if let Some(e) = &server.env {
-        if !e.is_empty() {
+    if let Some(e) = &server.env
+        && !e.is_empty() {
             config.insert("env".into(), json!(e));
         }
-    }
     let config = Value::Object(config);
 
     let written = if server.scope == "user" {
@@ -1300,14 +1285,13 @@ async fn stdio_probe(command: &str, args: &[String]) -> Value {
                 return fail(format!("Server failed: {}", truncate(&err, 300)));
             }
             let mut buf = vec![0u8; 4096];
-            if let Ok(Ok(n)) = timeout(Duration::from_millis(300), stderr.read(&mut buf)).await {
-                if n > 0 {
+            if let Ok(Ok(n)) = timeout(Duration::from_millis(300), stderr.read(&mut buf)).await
+                && n > 0 {
                     let low = String::from_utf8_lossy(&buf[..n]).to_lowercase();
                     if low.contains("running on stdio") || low.contains("server") {
                         break;
                     }
                 }
-            }
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
@@ -1412,8 +1396,8 @@ async fn stdio_probe(command: &str, args: &[String]) -> Value {
 
         let mut tools = Vec::new();
         let mut tool_count = 0i64;
-        if let Some(tr) = send_jsonrpc(&mut stdin, &mut reader, "tools/list", 2, 10).await {
-            if let Some(list) = tr
+        if let Some(tr) = send_jsonrpc(&mut stdin, &mut reader, "tools/list", 2, 10).await
+            && let Some(list) = tr
                 .get("result")
                 .and_then(|r| r.get("tools"))
                 .and_then(|v| v.as_array())
@@ -1427,13 +1411,12 @@ async fn stdio_probe(command: &str, args: &[String]) -> Value {
                     }));
                 }
             }
-        }
 
         let mut resources = Vec::new();
         let mut resource_count = 0i64;
-        if capabilities.get("resources").is_some() {
-            if let Some(rr) = send_jsonrpc(&mut stdin, &mut reader, "resources/list", 3, 5).await {
-                if let Some(list) = rr
+        if capabilities.get("resources").is_some()
+            && let Some(rr) = send_jsonrpc(&mut stdin, &mut reader, "resources/list", 3, 5).await
+                && let Some(list) = rr
                     .get("result")
                     .and_then(|r| r.get("resources"))
                     .and_then(|v| v.as_array())
@@ -1448,14 +1431,12 @@ async fn stdio_probe(command: &str, args: &[String]) -> Value {
                         }));
                     }
                 }
-            }
-        }
 
         let mut prompts = Vec::new();
         let mut prompt_count = 0i64;
-        if capabilities.get("prompts").is_some() {
-            if let Some(pr) = send_jsonrpc(&mut stdin, &mut reader, "prompts/list", 4, 5).await {
-                if let Some(list) = pr
+        if capabilities.get("prompts").is_some()
+            && let Some(pr) = send_jsonrpc(&mut stdin, &mut reader, "prompts/list", 4, 5).await
+                && let Some(list) = pr
                     .get("result")
                     .and_then(|r| r.get("prompts"))
                     .and_then(|v| v.as_array())
@@ -1480,8 +1461,6 @@ async fn stdio_probe(command: &str, args: &[String]) -> Value {
                         }));
                     }
                 }
-            }
-        }
 
         cleanup(child).await;
         return json!({
@@ -1655,8 +1634,7 @@ async fn http_probe(server: &Value, url: &str) -> Value {
     let mut tools = Vec::new();
     let mut tool_count = 0i64;
     if let Some(tr) = http_jsonrpc(&client, url, to_header_map(&headers), "tools/list", 2, 10).await
-    {
-        if let Some(list) = tr
+        && let Some(list) = tr
             .get("result")
             .and_then(|r| r.get("tools"))
             .and_then(|v| v.as_array())
@@ -1670,12 +1648,11 @@ async fn http_probe(server: &Value, url: &str) -> Value {
                 }));
             }
         }
-    }
 
     let mut resources = Vec::new();
     let mut resource_count = 0i64;
-    if capabilities.get("resources").is_some() {
-        if let Some(rr) = http_jsonrpc(
+    if capabilities.get("resources").is_some()
+        && let Some(rr) = http_jsonrpc(
             &client,
             url,
             to_header_map(&headers),
@@ -1684,8 +1661,7 @@ async fn http_probe(server: &Value, url: &str) -> Value {
             5,
         )
         .await
-        {
-            if let Some(list) = rr
+            && let Some(list) = rr
                 .get("result")
                 .and_then(|r| r.get("resources"))
                 .and_then(|v| v.as_array())
@@ -1700,16 +1676,13 @@ async fn http_probe(server: &Value, url: &str) -> Value {
                     }));
                 }
             }
-        }
-    }
 
     let mut prompts = Vec::new();
     let mut prompt_count = 0i64;
-    if capabilities.get("prompts").is_some() {
-        if let Some(pr) =
+    if capabilities.get("prompts").is_some()
+        && let Some(pr) =
             http_jsonrpc(&client, url, to_header_map(&headers), "prompts/list", 4, 5).await
-        {
-            if let Some(list) = pr
+            && let Some(list) = pr
                 .get("result")
                 .and_then(|r| r.get("prompts"))
                 .and_then(|v| v.as_array())
@@ -1734,8 +1707,6 @@ async fn http_probe(server: &Value, url: &str) -> Value {
                     }));
                 }
             }
-        }
-    }
 
     json!({
         "success": true,
@@ -1996,15 +1967,14 @@ fn write_credentials(data: &Value) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    if let Ok(s) = serde_json::to_string_pretty(data) {
-        if std::fs::write(&path, s).is_ok() {
+    if let Ok(s) = serde_json::to_string_pretty(data)
+        && std::fs::write(&path, s).is_ok() {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
                 let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
             }
         }
-    }
 }
 
 fn make_cred_key(server_name: &str, server_url: &str) -> String {
@@ -2020,8 +1990,8 @@ fn find_cred_entry(server_name: &str, server_url: Option<&str>) -> Option<Value>
 
     if let Some(url) = server_url {
         let key = make_cred_key(server_name, url);
-        if let Some(entry) = mcp_oauth.get(&key) {
-            if entry
+        if let Some(entry) = mcp_oauth.get(&key)
+            && entry
                 .get("accessToken")
                 .and_then(|v| v.as_str())
                 .map(|s| !s.is_empty())
@@ -2029,7 +1999,6 @@ fn find_cred_entry(server_name: &str, server_url: Option<&str>) -> Option<Value>
             {
                 return Some(entry.clone());
             }
-        }
     }
 
     let prefix = format!("{}|", server_name);
@@ -2250,22 +2219,16 @@ async fn discover_oauth_metadata(server_url: &str) -> Result<Value, String> {
     }
 
     let mut auth_server_url: Option<String> = None;
-    if let Some(rm_url) = &resource_metadata_url {
-        if let Ok(rm) = client.get(rm_url).send().await {
-            if rm.status().as_u16() == 200 {
-                if let Ok(rm_data) = rm.json::<Value>().await {
-                    if let Some(arr) = rm_data
+    if let Some(rm_url) = &resource_metadata_url
+        && let Ok(rm) = client.get(rm_url).send().await
+            && rm.status().as_u16() == 200
+                && let Ok(rm_data) = rm.json::<Value>().await
+                    && let Some(arr) = rm_data
                         .get("authorization_servers")
                         .and_then(|v| v.as_array())
-                    {
-                        if let Some(first) = arr.first().and_then(|v| v.as_str()) {
+                        && let Some(first) = arr.first().and_then(|v| v.as_str()) {
                             auth_server_url = Some(first.to_string());
                         }
-                    }
-                }
-            }
-        }
-    }
 
     if auth_server_url.is_none() {
         // Derive scheme://netloc from the server URL (Python urlparse).
@@ -2279,21 +2242,17 @@ async fn discover_oauth_metadata(server_url: &str) -> Result<Value, String> {
     let base = base.trim_end_matches('/');
 
     let well_known = format!("{}/.well-known/oauth-authorization-server", base);
-    if let Ok(r) = client.get(&well_known).send().await {
-        if r.status().as_u16() == 200 {
-            if let Ok(v) = r.json::<Value>().await {
+    if let Ok(r) = client.get(&well_known).send().await
+        && r.status().as_u16() == 200
+            && let Ok(v) = r.json::<Value>().await {
                 return Ok(v);
             }
-        }
-    }
     let openid = format!("{}/.well-known/openid-configuration", base);
-    if let Ok(r) = client.get(&openid).send().await {
-        if r.status().as_u16() == 200 {
-            if let Ok(v) = r.json::<Value>().await {
+    if let Ok(r) = client.get(&openid).send().await
+        && r.status().as_u16() == 200
+            && let Ok(v) = r.json::<Value>().await {
                 return Ok(v);
             }
-        }
-    }
 
     Err(format!(
         "Could not discover OAuth metadata for {}. Server may not support MCP OAuth authentication.",
@@ -2674,16 +2633,14 @@ async fn search_registry(Query(q): Query<RegistrySearchQuery>) -> AppResult<Json
         ("limit", q.limit.to_string()),
         ("version", "latest".to_string()),
     ];
-    if let Some(s) = &q.q {
-        if !s.is_empty() {
+    if let Some(s) = &q.q
+        && !s.is_empty() {
             params.push(("search", s.clone()));
         }
-    }
-    if let Some(c) = &q.cursor {
-        if !c.is_empty() {
+    if let Some(c) = &q.cursor
+        && !c.is_empty() {
             params.push(("cursor", c.clone()));
         }
-    }
     let url = format!("{}/servers?{}", REGISTRY_BASE_URL, build_query(&params));
     registry_get(&url).await
 }
@@ -2845,11 +2802,10 @@ fn generate_remote_config(
     let mut config = Map::new();
     config.insert("type".into(), json!(config_type));
     config.insert("url".into(), json!(url));
-    if let Some(h) = headers {
-        if !h.is_empty() {
+    if let Some(h) = headers
+        && !h.is_empty() {
             config.insert("headers".into(), json!(h));
         }
-    }
     Value::Object(config)
 }
 

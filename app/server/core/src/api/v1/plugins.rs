@@ -506,11 +506,10 @@ fn read_plugin_readme(plugin_dir: &Path) -> Option<String> {
         plugin_dir.join(".claude-plugin").join("readme.md"),
     ];
     for p in &candidates {
-        if p.exists() {
-            if let Ok(s) = std::fs::read_to_string(p) {
+        if p.exists()
+            && let Ok(s) = std::fs::read_to_string(p) {
                 return Some(s);
             }
-        }
     }
     None
 }
@@ -559,15 +558,14 @@ fn get_enabled_plugins_from_settings() -> Vec<Value> {
         let install_info = installed_map.get(plugin_key);
         let mut install_path: Option<String> = None;
         let mut version: Value = Value::Null;
-        if let Some(Value::Array(arr)) = install_info {
-            if let Some(first) = arr.first() {
+        if let Some(Value::Array(arr)) = install_info
+            && let Some(first) = arr.first() {
                 install_path = first
                     .get("installPath")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
                 version = first.get("version").cloned().unwrap_or(Value::Null);
             }
-        }
 
         let mut components: Vec<Value> = Vec::new();
         let mut skill_count: i64 = 0;
@@ -583,8 +581,8 @@ fn get_enabled_plugins_from_settings() -> Vec<Value> {
             let plugin_dir = PathBuf::from(ip);
             if plugin_dir.exists() {
                 let commands_dir = plugin_dir.join("commands");
-                if commands_dir.exists() {
-                    if let Ok(rd) = std::fs::read_dir(&commands_dir) {
+                if commands_dir.exists()
+                    && let Ok(rd) = std::fs::read_dir(&commands_dir) {
                         for entry in rd.flatten() {
                             let p = entry.path();
                             if p.extension().and_then(|x| x.to_str()) == Some("md") {
@@ -601,11 +599,10 @@ fn get_enabled_plugins_from_settings() -> Vec<Value> {
                             }
                         }
                     }
-                }
 
                 let skills_dir = plugin_dir.join("skills");
-                if skills_dir.exists() {
-                    if let Ok(rd) = std::fs::read_dir(&skills_dir) {
+                if skills_dir.exists()
+                    && let Ok(rd) = std::fs::read_dir(&skills_dir) {
                         for entry in rd.flatten() {
                             let p = entry.path();
                             let is_dir = p.is_dir();
@@ -628,11 +625,10 @@ fn get_enabled_plugins_from_settings() -> Vec<Value> {
                             }
                         }
                     }
-                }
 
                 let agents_dir = plugin_dir.join("agents");
-                if agents_dir.exists() {
-                    if let Ok(rd) = std::fs::read_dir(&agents_dir) {
+                if agents_dir.exists()
+                    && let Ok(rd) = std::fs::read_dir(&agents_dir) {
                         for entry in rd.flatten() {
                             let p = entry.path();
                             if p.extension().and_then(|x| x.to_str()) == Some("md") {
@@ -649,7 +645,6 @@ fn get_enabled_plugins_from_settings() -> Vec<Value> {
                             }
                         }
                     }
-                }
 
                 let mcp_dir = plugin_dir.join("mcp-servers");
                 if mcp_dir.exists() {
@@ -1179,8 +1174,8 @@ fn check_for_updates(cwd_fallback: &std::path::Path) -> Value {
         };
         let avail_ver = avail.get("version").and_then(|v| v.as_str());
         let inst_ver = inst.get("version").and_then(|v| v.as_str());
-        if let (Some(av), Some(iv)) = (avail_ver, inst_ver) {
-            if !av.is_empty() && !iv.is_empty() && version_compare(iv, av) < 0 {
+        if let (Some(av), Some(iv)) = (avail_ver, inst_ver)
+            && !av.is_empty() && !iv.is_empty() && version_compare(iv, av) < 0 {
                 update_info_list.push(json!({
                     "name": name,
                     "installed_version": iv,
@@ -1189,7 +1184,6 @@ fn check_for_updates(cwd_fallback: &std::path::Path) -> Value {
                     "source": inst.get("source").cloned().unwrap_or(Value::Null),
                 }));
             }
-        }
     }
 
     let count = update_info_list.len();
@@ -1329,12 +1323,11 @@ async fn get_marketplace_plugin_details(
     let mut readme_content: Value = Value::Null;
     for readme_name in ["README.md", "readme.md", "README.MD"] {
         let readme_path = plugin_dir.join(readme_name);
-        if readme_path.exists() {
-            if let Ok(s) = std::fs::read_to_string(&readme_path) {
+        if readme_path.exists()
+            && let Ok(s) = std::fs::read_to_string(&readme_path) {
                 readme_content = Value::String(s);
                 break;
             }
-        }
     }
 
     let plugin_json_path = plugin_dir.join(".claude-plugin").join("plugin.json");
@@ -1367,8 +1360,8 @@ async fn get_marketplace_plugin_details(
 
     let mut components: Vec<Value> = Vec::new();
     let commands_dir = plugin_dir.join("commands");
-    if commands_dir.exists() {
-        if let Ok(rd) = std::fs::read_dir(&commands_dir) {
+    if commands_dir.exists()
+        && let Ok(rd) = std::fs::read_dir(&commands_dir) {
             for entry in rd.flatten() {
                 let p = entry.path();
                 if p.extension().and_then(|x| x.to_str()) == Some("md") {
@@ -1380,10 +1373,9 @@ async fn get_marketplace_plugin_details(
                 }
             }
         }
-    }
     let agents_dir = plugin_dir.join("agents");
-    if agents_dir.exists() {
-        if let Ok(rd) = std::fs::read_dir(&agents_dir) {
+    if agents_dir.exists()
+        && let Ok(rd) = std::fs::read_dir(&agents_dir) {
             for entry in rd.flatten() {
                 let p = entry.path();
                 if p.extension().and_then(|x| x.to_str()) == Some("md") {
@@ -1395,10 +1387,9 @@ async fn get_marketplace_plugin_details(
                 }
             }
         }
-    }
     let skills_dir = plugin_dir.join("skills");
-    if skills_dir.exists() {
-        if let Ok(rd) = std::fs::read_dir(&skills_dir) {
+    if skills_dir.exists()
+        && let Ok(rd) = std::fs::read_dir(&skills_dir) {
             for entry in rd.flatten() {
                 let p = entry.path();
                 let is_dir = p.is_dir();
@@ -1413,7 +1404,6 @@ async fn get_marketplace_plugin_details(
                 }
             }
         }
-    }
 
     let has_mcp = plugin_info
         .get("mcpServers")
@@ -1788,15 +1778,14 @@ async fn get_plugin(
         .join(".claude-plugin")
         .join("plugin.json");
 
-    if !plugin_path.exists() {
-        if let Some(pp) = q.project_path.as_deref() {
+    if !plugin_path.exists()
+        && let Some(pp) = q.project_path.as_deref() {
             let project_plugins_dir = paths::get_project_plugins_dir(Some(pp), &state.cwd_fallback);
             plugin_path = project_plugins_dir
                 .join(&name)
                 .join(".claude-plugin")
                 .join("plugin.json");
         }
-    }
 
     if !plugin_path.exists() {
         return Err(AppError::not_found(format!("Plugin '{}' not found", name)));
@@ -1835,9 +1824,9 @@ async fn uninstall_plugin(
     let mut matching_key: Option<String> = None;
 
     let installed_plugins_file = paths::get_installed_plugins_file();
-    if installed_plugins_file.exists() {
-        if let Ok(content) = std::fs::read_to_string(&installed_plugins_file) {
-            if let Ok(mut data) = serde_json::from_str::<Value>(&content) {
+    if installed_plugins_file.exists()
+        && let Ok(content) = std::fs::read_to_string(&installed_plugins_file)
+            && let Ok(mut data) = serde_json::from_str::<Value>(&content) {
                 let plugins_obj = data
                     .get("plugins")
                     .and_then(|v| v.as_object())
@@ -1870,20 +1859,17 @@ async fn uninstall_plugin(
                     if let Some(pmap) = data.get_mut("plugins").and_then(|v| v.as_object_mut()) {
                         pmap.remove(mk);
                     }
-                    if let Ok(serialized) = serde_json::to_string_pretty(&data) {
-                        if std::fs::write(&installed_plugins_file, serialized).is_ok() {
+                    if let Ok(serialized) = serde_json::to_string_pretty(&data)
+                        && std::fs::write(&installed_plugins_file, serialized).is_ok() {
                             removed_any = true;
                         }
-                    }
                 }
             }
-        }
-    }
 
     // ALWAYS try to remove from settings.json (enabledPlugins)
     let settings_file = paths::get_claude_user_settings_file();
-    if settings_file.exists() {
-        if let Some(mut settings_data) = read_json_file(&settings_file) {
+    if settings_file.exists()
+        && let Some(mut settings_data) = read_json_file(&settings_file) {
             if !settings_data.is_object() {
                 settings_data = json!({});
             }
@@ -1917,7 +1903,6 @@ async fn uninstall_plugin(
                 }
             }
         }
-    }
 
     if !removed_any {
         return Err(AppError::not_found(format!("Plugin '{}' not found", name)));

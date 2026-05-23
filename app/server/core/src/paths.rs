@@ -189,6 +189,5 @@ pub fn get_project_display_name(folder_name: &str) -> String {
 pub fn convert_path_to_folder_name(absolute_path: &str) -> String {
     absolute_path
         .trim_end_matches('/')
-        .replace('/', "-")
-        .replace('.', "-")
+        .replace(['/', '.'], "-")
 }

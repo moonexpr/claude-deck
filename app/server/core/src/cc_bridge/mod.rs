@@ -345,11 +345,10 @@ fn spawn_session(req: &SpawnRequest) -> Result<Value, AppError> {
     use std::path::PathBuf;
     let mut directory = req.directory.clone();
 
-    if req.mode == "resume" && directory.trim().is_empty() {
-        if let Some(pf) = &req.project_folder {
+    if req.mode == "resume" && directory.trim().is_empty()
+        && let Some(pf) = &req.project_folder {
             directory = resolve_project_directory(pf)?;
         }
-    }
 
     let dir_input = PathBuf::from(&directory);
     let dir_path = std::fs::canonicalize(&dir_input).unwrap_or_else(|_| dir_input.clone());
@@ -516,10 +515,10 @@ fn kill_session(session_name: &str, cleanup_worktree: bool) -> Value {
         Err(e) => return json!({ "killed": false, "error": e.to_string() }),
     }
 
-    if cleanup_worktree {
-        if let Some(meta) = &metadata {
-            if meta.mode == "worktree" {
-                if let Some(wt_name) = &meta.worktree_name {
+    if cleanup_worktree
+        && let Some(meta) = &metadata
+            && meta.mode == "worktree"
+                && let Some(wt_name) = &meta.worktree_name {
                     let _ = run_cmd(
                         &[
                             "git",
@@ -533,9 +532,6 @@ fn kill_session(session_name: &str, cleanup_worktree: bool) -> Value {
                         10,
                     );
                 }
-            }
-        }
-    }
 
     spawned_sessions().lock().unwrap().remove(session_name);
     json!({ "killed": true })

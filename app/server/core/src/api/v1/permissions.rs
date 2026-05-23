@@ -252,8 +252,8 @@ fn list_permissions_core(project_path: Option<&str>) -> (Vec<Rule>, Value) {
 
     // User-level.
     let user_path = paths::get_claude_user_settings_file();
-    if let Some(user_settings) = read_json_file(&user_path) {
-        if let Some(perms) = user_settings.get("permissions").and_then(|v| v.as_object()) {
+    if let Some(user_settings) = read_json_file(&user_path)
+        && let Some(perms) = user_settings.get("permissions").and_then(|v| v.as_object()) {
             if let Some(dm) = perms.get("defaultMode") {
                 default_mode = dm.clone();
             }
@@ -265,13 +265,12 @@ fn list_permissions_core(project_path: Option<&str>) -> (Vec<Rule>, Value) {
             }
             parse_scope(perms, "user", &mut rules);
         }
-    }
 
     // Project-level (overrides / merges user).
     if let Some(pp) = project_path {
         let proj_path = paths::get_project_settings_file(Some(pp), std::path::Path::new(""));
-        if let Some(proj_settings) = read_json_file(&proj_path) {
-            if let Some(perms) = proj_settings.get("permissions").and_then(|v| v.as_object()) {
+        if let Some(proj_settings) = read_json_file(&proj_path)
+            && let Some(perms) = proj_settings.get("permissions").and_then(|v| v.as_object()) {
                 if let Some(dm) = perms.get("defaultMode") {
                     default_mode = dm.clone();
                 }
@@ -288,11 +287,10 @@ fn list_permissions_core(project_path: Option<&str>) -> (Vec<Rule>, Value) {
                         Value::Array(user_arr) if !user_arr.is_empty() => {
                             let mut merged: Vec<String> = Vec::new();
                             for v in user_arr {
-                                if let Some(s) = v.as_str() {
-                                    if !merged.iter().any(|x| x == s) {
+                                if let Some(s) = v.as_str()
+                                    && !merged.iter().any(|x| x == s) {
                                         merged.push(s.to_string());
                                     }
-                                }
                             }
                             for s in &proj_strs {
                                 if !merged.iter().any(|x| x == s) {
@@ -313,7 +311,6 @@ fn list_permissions_core(project_path: Option<&str>) -> (Vec<Rule>, Value) {
                 }
                 parse_scope(perms, "project", &mut rules);
             }
-        }
     }
 
     let settings = json!({
@@ -388,24 +385,22 @@ async fn update_settings(
         ));
     }
     // Endpoint-level mode check (HTTPException 400).
-    if let Some(dm) = &body.default_mode {
-        if !dm.is_empty() && !VALID_PERMISSION_MODES.contains(&dm.as_str()) {
+    if let Some(dm) = &body.default_mode
+        && !dm.is_empty() && !VALID_PERMISSION_MODES.contains(&dm.as_str()) {
             return Err(AppError::bad_request(format!(
                 "defaultMode must be one of: {}",
                 VALID_PERMISSION_MODES.join(", ")
             )));
         }
-    }
     // Service-level mode check (ValueError -> 400).
-    if let Some(dm) = &body.default_mode {
-        if !dm.is_empty() && !VALID_PERMISSION_MODES.contains(&dm.as_str()) {
+    if let Some(dm) = &body.default_mode
+        && !dm.is_empty() && !VALID_PERMISSION_MODES.contains(&dm.as_str()) {
             return Err(AppError::bad_request(format!(
                 "Invalid permission mode: {}. Must be one of: {}",
                 dm,
                 VALID_PERMISSION_MODES.join(", ")
             )));
         }
-    }
 
     let settings_path = settings_path_for(&scope, q.project_path.as_deref())?;
 
@@ -576,22 +571,20 @@ async fn update_permission(
         ));
     }
     // Endpoint-level type check (HTTPException 400).
-    if let Some(t) = &update.type_ {
-        if !t.is_empty() && !["allow", "ask", "deny"].contains(&t.as_str()) {
+    if let Some(t) = &update.type_
+        && !t.is_empty() && !["allow", "ask", "deny"].contains(&t.as_str()) {
             return Err(AppError::bad_request(
                 "Type must be 'allow', 'ask', or 'deny'",
             ));
         }
-    }
     // Service-level type check (ValueError -> 404 per endpoint mapping).
-    if let Some(t) = &update.type_ {
-        if !t.is_empty() && !["allow", "ask", "deny"].contains(&t.as_str()) {
+    if let Some(t) = &update.type_
+        && !t.is_empty() && !["allow", "ask", "deny"].contains(&t.as_str()) {
             return Err(AppError::not_found(format!(
                 "Invalid rule type: {}. Must be 'allow', 'ask', or 'deny'",
                 t
             )));
         }
-    }
 
     let project_path = q.project_path.as_deref();
     let (rules, _) = list_permissions_core(project_path);
@@ -707,14 +700,12 @@ async fn remove_permission_core(
         if let Some(list) = perms
             .get_mut(&existing.type_)
             .and_then(|v| v.as_array_mut())
-        {
-            if let Some(pos) = list
+            && let Some(pos) = list
                 .iter()
                 .position(|v| v.as_str() == Some(existing.pattern.as_str()))
             {
                 list.remove(pos);
             }
-        }
     }
 
     if !write_json_file(&settings_path, &settings).await {

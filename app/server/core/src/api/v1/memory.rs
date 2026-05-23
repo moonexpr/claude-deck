@@ -281,11 +281,10 @@ fn scalar_to_value(s: &str) -> Value {
     if let Ok(n) = t.parse::<i64>() {
         return json!(n);
     }
-    if let Ok(f) = t.parse::<f64>() {
-        if t.chars().any(|c| c == '.' || c == 'e' || c == 'E') {
+    if let Ok(f) = t.parse::<f64>()
+        && t.chars().any(|c| c == '.' || c == 'e' || c == 'E') {
             return json!(f);
         }
-    }
     Value::String(t.to_string())
 }
 
@@ -455,17 +454,15 @@ fn save_memory(file_path: &str, content: &str, create_parents: bool) -> Value {
         });
     }
 
-    if create_parents {
-        if let Some(parent) = path.parent() {
-            if let Err(e) = std::fs::create_dir_all(parent) {
+    if create_parents
+        && let Some(parent) = path.parent()
+            && let Err(e) = std::fs::create_dir_all(parent) {
                 return json!({
                     "success": false,
                     "error": e.to_string(),
                     "path": path_str,
                 });
             }
-        }
-    }
 
     match std::fs::write(&path, content) {
         Ok(_) => json!({ "success": true, "path": path_str }),
@@ -570,19 +567,17 @@ fn create_rule_file(
     let rule_path = rules_dir.join(format!("{}.md", name));
 
     let mut frontmatter_parts: Vec<String> = Vec::new();
-    if let Some(d) = description {
-        if !d.is_empty() {
+    if let Some(d) = description
+        && !d.is_empty() {
             frontmatter_parts.push(format!("description: {}", d));
         }
-    }
-    if let Some(ps) = rule_paths {
-        if !ps.is_empty() {
+    if let Some(ps) = rule_paths
+        && !ps.is_empty() {
             frontmatter_parts.push("paths:".to_string());
             for p in ps {
                 frontmatter_parts.push(format!("  - {}", p));
             }
         }
-    }
 
     let full_content = if !frontmatter_parts.is_empty() {
         format!("---\n{}\n---\n\n{}", frontmatter_parts.join("\n"), content)

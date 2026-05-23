@@ -166,8 +166,8 @@ fn get_merged_config(project_path: Option<&str>) -> Value {
     let mut agents: Vec<Value> = Vec::new();
 
     let user_claude = paths::get_claude_user_config_file();
-    if user_claude.exists() {
-        if let Some(data) = read_json_file(&user_claude) {
+    if user_claude.exists()
+        && let Some(data) = read_json_file(&user_claude) {
             if let Some(srv) = data.get("mcpServers").and_then(obj) {
                 shallow_update(&mut mcp_servers, srv);
             }
@@ -179,49 +179,42 @@ fn get_merged_config(project_path: Option<&str>) -> Value {
                 }
             }
         }
-    }
 
     let user_settings = paths::get_claude_user_settings_file();
-    if user_settings.exists() {
-        if let Some(data) = read_json_file(&user_settings) {
+    if user_settings.exists()
+        && let Some(data) = read_json_file(&user_settings) {
             if let Some(m) = obj(&data) {
                 shallow_update(&mut settings, m);
             }
-            if let Some(h) = data.get("hooks") {
-                if let Some(hm) = h.as_object() {
+            if let Some(h) = data.get("hooks")
+                && let Some(hm) = h.as_object() {
                     hooks = hm.clone();
                 }
-            }
             if let Some(p) = data.get("permissions").and_then(obj) {
                 shallow_update(&mut permissions, p);
             }
         }
-    }
 
     let user_local = paths::get_claude_user_settings_local_file();
-    if user_local.exists() {
-        if let Some(data) = read_json_file(&user_local) {
-            if let Some(m) = obj(&data) {
+    if user_local.exists()
+        && let Some(data) = read_json_file(&user_local)
+            && let Some(m) = obj(&data) {
                 shallow_update(&mut settings, m);
             }
-        }
-    }
 
     if let Some(pp) = project_path {
         let proj = PathBuf::from(pp);
 
         let mcp_json = proj.join(".mcp.json");
-        if mcp_json.exists() {
-            if let Some(data) = read_json_file(&mcp_json) {
-                if let Some(srv) = data.get("mcpServers").and_then(obj) {
+        if mcp_json.exists()
+            && let Some(data) = read_json_file(&mcp_json)
+                && let Some(srv) = data.get("mcpServers").and_then(obj) {
                     shallow_update(&mut mcp_servers, srv);
                 }
-            }
-        }
 
         let proj_settings = proj.join(".claude/settings.json");
-        if proj_settings.exists() {
-            if let Some(data) = read_json_file(&proj_settings) {
+        if proj_settings.exists()
+            && let Some(data) = read_json_file(&proj_settings) {
                 if let Some(m) = obj(&data) {
                     shallow_update(&mut settings, m);
                 }
@@ -234,16 +227,13 @@ fn get_merged_config(project_path: Option<&str>) -> Value {
                     }
                 }
             }
-        }
 
         let proj_local = proj.join(".claude/settings.local.json");
-        if proj_local.exists() {
-            if let Some(data) = read_json_file(&proj_local) {
-                if let Some(m) = obj(&data) {
+        if proj_local.exists()
+            && let Some(data) = read_json_file(&proj_local)
+                && let Some(m) = obj(&data) {
                     shallow_update(&mut settings, m);
                 }
-            }
-        }
     }
 
     let cmds = paths::get_claude_user_commands_dir();
@@ -266,31 +256,27 @@ fn get_merged_config(project_path: Option<&str>) -> Value {
     }
 
     let agents_dir = paths::get_claude_user_agents_dir();
-    if agents_dir.exists() {
-        if let Ok(rd) = std::fs::read_dir(&agents_dir) {
+    if agents_dir.exists()
+        && let Ok(rd) = std::fs::read_dir(&agents_dir) {
             for p in rd.flatten().map(|e| e.path()) {
-                if p.extension().and_then(|x| x.to_str()) == Some("md") {
-                    if let Some(stem) = p.file_stem() {
+                if p.extension().and_then(|x| x.to_str()) == Some("md")
+                    && let Some(stem) = p.file_stem() {
                         agents.push(Value::String(stem.to_string_lossy().into_owned()));
                     }
-                }
             }
         }
-    }
     if let Some(pp) = project_path {
         let proj_agents = PathBuf::from(pp).join(".claude/agents");
-        if proj_agents.exists() {
-            if let Ok(rd) = std::fs::read_dir(&proj_agents) {
+        if proj_agents.exists()
+            && let Ok(rd) = std::fs::read_dir(&proj_agents) {
                 for p in rd.flatten().map(|e| e.path()) {
-                    if p.extension().and_then(|x| x.to_str()) == Some("md") {
-                        if let Some(stem) = p.file_stem() {
+                    if p.extension().and_then(|x| x.to_str()) == Some("md")
+                        && let Some(stem) = p.file_stem() {
                             agents
                                 .push(Value::String(format!("project:{}", stem.to_string_lossy())));
                         }
-                    }
                 }
             }
-        }
     }
 
     json!({
@@ -410,13 +396,11 @@ async fn discover_projects(Json(req): Json<ProjectDiscoveryRequest>) -> AppResul
     if let Ok(rd) = std::fs::read_dir(&base_dir) {
         for entry in rd.flatten() {
             let p = entry.path();
-            if p.is_dir() {
-                if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
-                    if !name.starts_with('.') {
+            if p.is_dir()
+                && let Some(name) = p.file_name().and_then(|n| n.to_str())
+                    && !name.starts_with('.') {
                         dirs_to_check.push(p);
                     }
-                }
-            }
         }
     }
 

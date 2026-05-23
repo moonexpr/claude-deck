@@ -52,43 +52,35 @@ fn merged_settings(project_path: Option<&str>) -> Map<String, Value> {
     let mut settings = Map::new();
 
     let user_settings = paths::get_claude_user_settings_file();
-    if user_settings.exists() {
-        if let Some(data) = read_json_file(&user_settings) {
-            if let Some(m) = obj(&data) {
+    if user_settings.exists()
+        && let Some(data) = read_json_file(&user_settings)
+            && let Some(m) = obj(&data) {
                 shallow_update(&mut settings, m);
             }
-        }
-    }
 
     let user_local = paths::get_claude_user_settings_local_file();
-    if user_local.exists() {
-        if let Some(data) = read_json_file(&user_local) {
-            if let Some(m) = obj(&data) {
+    if user_local.exists()
+        && let Some(data) = read_json_file(&user_local)
+            && let Some(m) = obj(&data) {
                 shallow_update(&mut settings, m);
             }
-        }
-    }
 
     if let Some(pp) = project_path {
         let proj = PathBuf::from(pp);
 
         let proj_settings = proj.join(".claude/settings.json");
-        if proj_settings.exists() {
-            if let Some(data) = read_json_file(&proj_settings) {
-                if let Some(m) = obj(&data) {
+        if proj_settings.exists()
+            && let Some(data) = read_json_file(&proj_settings)
+                && let Some(m) = obj(&data) {
                     shallow_update(&mut settings, m);
                 }
-            }
-        }
 
         let proj_local = proj.join(".claude/settings.local.json");
-        if proj_local.exists() {
-            if let Some(data) = read_json_file(&proj_local) {
-                if let Some(m) = obj(&data) {
+        if proj_local.exists()
+            && let Some(data) = read_json_file(&proj_local)
+                && let Some(m) = obj(&data) {
                     shallow_update(&mut settings, m);
                 }
-            }
-        }
     }
 
     settings
@@ -503,13 +495,11 @@ fn scan_jsonl_for_slug(filepath: &Path, slug: &str, project_folder: &str) -> Opt
             }
             last_seen = Some(ts.to_string());
         }
-        if git_branch.is_none() {
-            if let Some(gb) = obj.get("gitBranch").and_then(|v| v.as_str()) {
-                if !gb.is_empty() {
+        if git_branch.is_none()
+            && let Some(gb) = obj.get("gitBranch").and_then(|v| v.as_str())
+                && !gb.is_empty() {
                     git_branch = Some(gb.to_string());
                 }
-            }
-        }
     }
 
     first_seen.as_ref()?;

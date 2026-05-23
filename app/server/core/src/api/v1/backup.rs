@@ -294,8 +294,8 @@ fn detect_skill_dependencies(skill_path: &FsPath) -> Value {
     let package_json = skill_path.join("package.json");
     if package_json.exists() {
         has_package_json = true;
-        if let Ok(txt) = std::fs::read_to_string(&package_json) {
-            if let Ok(pkg) = serde_json::from_str::<Value>(&txt) {
+        if let Ok(txt) = std::fs::read_to_string(&package_json)
+            && let Ok(pkg) = serde_json::from_str::<Value>(&txt) {
                 for key in ["dependencies", "devDependencies"] {
                     if let Some(map) = pkg.get(key).and_then(|v| v.as_object()) {
                         for (name, version) in map {
@@ -308,7 +308,6 @@ fn detect_skill_dependencies(skill_path: &FsPath) -> Value {
                     }
                 }
             }
-        }
     }
 
     let requirements_txt = skill_path.join("requirements.txt");
@@ -366,24 +365,20 @@ fn get_plugin_install_info(plugin_name: &str, plugin_path: &FsPath) -> Value {
     let mut install_command: Value = Value::Null;
 
     let manifest_path = plugin_path.join("manifest.json");
-    if manifest_path.exists() {
-        if let Ok(txt) = std::fs::read_to_string(&manifest_path) {
-            if let Ok(m) = serde_json::from_str::<Value>(&txt) {
+    if manifest_path.exists()
+        && let Ok(txt) = std::fs::read_to_string(&manifest_path)
+            && let Ok(m) = serde_json::from_str::<Value>(&txt) {
                 version = m.get("version").cloned().unwrap_or(Value::Null);
                 source = m.get("source").cloned().unwrap_or(Value::Null);
             }
-        }
-    }
 
     let source_file = plugin_path.join(".source");
-    if source_file.exists() {
-        if let Ok(txt) = std::fs::read_to_string(&source_file) {
-            if let Ok(sd) = serde_json::from_str::<Value>(&txt) {
+    if source_file.exists()
+        && let Ok(txt) = std::fs::read_to_string(&source_file)
+            && let Ok(sd) = serde_json::from_str::<Value>(&txt) {
                 marketplace = sd.get("marketplace").cloned().unwrap_or(Value::Null);
                 install_command = sd.get("install_command").cloned().unwrap_or(Value::Null);
             }
-        }
-    }
 
     json!({
         "name": plugin_name,
@@ -435,8 +430,8 @@ fn generate_manifest(paths_list: &[PathBuf], scope: &str) -> Value {
 
     let mut skills: Vec<Value> = Vec::new();
     let skills_dir = paths::get_claude_user_skills_dir();
-    if skills_dir.exists() {
-        if let Ok(rd) = std::fs::read_dir(&skills_dir) {
+    if skills_dir.exists()
+        && let Ok(rd) = std::fs::read_dir(&skills_dir) {
             for entry in rd.flatten() {
                 let p = entry.path();
                 if p.is_dir() {
@@ -444,12 +439,11 @@ fn generate_manifest(paths_list: &[PathBuf], scope: &str) -> Value {
                 }
             }
         }
-    }
 
     let mut plugins: Vec<Value> = Vec::new();
     let plugins_dir = paths::get_claude_user_plugins_dir();
-    if plugins_dir.exists() {
-        if let Ok(rd) = std::fs::read_dir(&plugins_dir) {
+    if plugins_dir.exists()
+        && let Ok(rd) = std::fs::read_dir(&plugins_dir) {
             for entry in rd.flatten() {
                 let p = entry.path();
                 if p.is_dir() {
@@ -461,36 +455,30 @@ fn generate_manifest(paths_list: &[PathBuf], scope: &str) -> Value {
                 }
             }
         }
-    }
 
     let mut mcp_servers: Vec<Value> = Vec::new();
     let config_file = paths::get_claude_user_config_file();
-    if config_file.exists() {
-        if let Ok(txt) = std::fs::read_to_string(&config_file) {
-            if let Ok(config) = serde_json::from_str::<Value>(&txt) {
-                if let Some(map) = config.get("mcpServers").and_then(|v| v.as_object()) {
+    if config_file.exists()
+        && let Ok(txt) = std::fs::read_to_string(&config_file)
+            && let Ok(config) = serde_json::from_str::<Value>(&txt)
+                && let Some(map) = config.get("mcpServers").and_then(|v| v.as_object()) {
                     for (name, srv) in map {
                         mcp_servers.push(detect_mcp_server_info(name, srv, "user"));
                     }
                 }
-            }
-        }
-    }
 
     let mut agents: Vec<Value> = Vec::new();
     let agents_dir = paths::get_claude_user_agents_dir();
-    if agents_dir.exists() {
-        if let Ok(rd) = std::fs::read_dir(&agents_dir) {
+    if agents_dir.exists()
+        && let Ok(rd) = std::fs::read_dir(&agents_dir) {
             for entry in rd.flatten() {
                 let p = entry.path();
-                if p.extension().and_then(|e| e.to_str()) == Some("md") {
-                    if let Some(stem) = p.file_stem() {
+                if p.extension().and_then(|e| e.to_str()) == Some("md")
+                    && let Some(stem) = p.file_stem() {
                         agents.push(Value::String(stem.to_string_lossy().into_owned()));
                     }
-                }
             }
         }
-    }
 
     let mut commands: Vec<Value> = Vec::new();
     let commands_dir = paths::get_claude_user_commands_dir();
@@ -871,9 +859,9 @@ async fn get_restore_plan(
 
     let mut warnings: Vec<Value> = Vec::new();
     let mut platform_compatible = true;
-    if let Some(m) = &manifest {
-        if let Some(pb) = m.get("platform").and_then(|v| v.as_str()) {
-            if pb != current_platform {
+    if let Some(m) = &manifest
+        && let Some(pb) = m.get("platform").and_then(|v| v.as_str())
+            && pb != current_platform {
                 platform_compatible = false;
                 warnings.push(json!({
                     "type": "platform",
@@ -881,8 +869,6 @@ async fn get_restore_plan(
                     "severity": "warning",
                 }));
             }
-        }
-    }
 
     let files_to_restore: Vec<Value> = list_archive_members(&backup.file_path)
         .into_iter()
@@ -1167,12 +1153,11 @@ async fn restore_backup(
             continue;
         }
 
-        if let Some(sel) = &options.selective_restore {
-            if !sel.contains(&member) {
+        if let Some(sel) = &options.selective_restore
+            && !sel.contains(&member) {
                 files_skipped += 1;
                 continue;
             }
-        }
 
         if options.skip_skills && member.contains(".claude/skills/") {
             files_skipped += 1;
@@ -1227,8 +1212,8 @@ async fn restore_backup(
     }
 
     let mut manual_steps: Vec<Value> = Vec::new();
-    if let Some(m) = &manifest {
-        if let Some(skills) = m
+    if let Some(m) = &manifest
+        && let Some(skills) = m
             .get("contents")
             .and_then(|c| c.get("skills"))
             .and_then(|v| v.as_array())
@@ -1247,7 +1232,6 @@ async fn restore_backup(
                 }
             }
         }
-    }
 
     let message = format!(
         "{} {} files{}",
@@ -1367,11 +1351,10 @@ fn run_install_dependencies(manifest: &Value, request: &DependencyInstallRequest
                     .unwrap_or("")
                     .to_string();
 
-                if let Some(names) = &request.skill_names {
-                    if !names.contains(&sname) {
+                if let Some(names) = &request.skill_names
+                    && !names.contains(&sname) {
                         continue;
                     }
-                }
 
                 let skill_path = skills_dir.join(&sname);
                 if !skill_path.exists() {
@@ -1401,8 +1384,8 @@ fn run_install_dependencies(manifest: &Value, request: &DependencyInstallRequest
         }
     }
 
-    if request.install_plugins {
-        if let Some(plugins) = contents.get("plugins").and_then(|v| v.as_array()) {
+    if request.install_plugins
+        && let Some(plugins) = contents.get("plugins").and_then(|v| v.as_array()) {
             for plugin_info in plugins {
                 let pname = plugin_info
                     .get("name")
@@ -1410,11 +1393,10 @@ fn run_install_dependencies(manifest: &Value, request: &DependencyInstallRequest
                     .unwrap_or("")
                     .to_string();
 
-                if let Some(names) = &request.plugin_names {
-                    if !names.contains(&pname) {
+                if let Some(names) = &request.plugin_names
+                    && !names.contains(&pname) {
                         continue;
                     }
-                }
 
                 let install_command = plugin_info.get("install_command").and_then(|v| v.as_str());
                 if let Some(cmd) = install_command {
@@ -1434,7 +1416,6 @@ fn run_install_dependencies(manifest: &Value, request: &DependencyInstallRequest
                 }
             }
         }
-    }
 
     let success = failed.is_empty();
     let message = format!(

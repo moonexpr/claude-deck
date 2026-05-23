@@ -243,8 +243,8 @@ fn calculate_tiered_cost(
         return 0.0;
     }
 
-    if total_tokens > TIERED_THRESHOLD {
-        if let Some(tiered) = tiered_price {
+    if total_tokens > TIERED_THRESHOLD
+        && let Some(tiered) = tiered_price {
             let tokens_below = total_tokens.min(TIERED_THRESHOLD);
             let tokens_above = (total_tokens - TIERED_THRESHOLD).max(0);
             let mut tiered_cost = tokens_above as f64 * tiered;
@@ -253,7 +253,6 @@ fn calculate_tiered_cost(
             }
             return tiered_cost;
         }
-    }
 
     if let Some(base) = base_price {
         return total_tokens as f64 * base;
@@ -338,8 +337,8 @@ fn discover_jsonl_files(project_path: Option<&str>) -> Vec<PathBuf> {
     if let Some(pp) = project_path {
         let folder_name = convert_path_to_folder_name(pp);
         let project_folder = projects_dir.join(folder_name);
-        if project_folder.exists() {
-            if let Ok(rd) = std::fs::read_dir(&project_folder) {
+        if project_folder.exists()
+            && let Ok(rd) = std::fs::read_dir(&project_folder) {
                 for entry in rd.flatten() {
                     let p = entry.path();
                     if p.extension().and_then(|e| e.to_str()) == Some("jsonl") {
@@ -347,13 +346,12 @@ fn discover_jsonl_files(project_path: Option<&str>) -> Vec<PathBuf> {
                     }
                 }
             }
-        }
     } else {
         if let Ok(rd) = std::fs::read_dir(&projects_dir) {
             for entry in rd.flatten() {
                 let folder = entry.path();
-                if folder.is_dir() {
-                    if let Ok(inner) = std::fs::read_dir(&folder) {
+                if folder.is_dir()
+                    && let Ok(inner) = std::fs::read_dir(&folder) {
                         for f in inner.flatten() {
                             let p = f.path();
                             if p.extension().and_then(|e| e.to_str()) == Some("jsonl") {
@@ -361,7 +359,6 @@ fn discover_jsonl_files(project_path: Option<&str>) -> Vec<PathBuf> {
                             }
                         }
                     }
-                }
             }
         }
     }
@@ -550,11 +547,10 @@ fn unique_versions(entries: &[LoadedUsageEntry]) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
     let mut out = Vec::new();
     for e in entries {
-        if let Some(v) = &e.version {
-            if seen.insert(v.clone()) {
+        if let Some(v) = &e.version
+            && seen.insert(v.clone()) {
                 out.push(v.clone());
             }
-        }
     }
     out
 }
@@ -1019,13 +1015,11 @@ fn identify_session_blocks(entries: &[LoadedUsageEntry]) -> Vec<Value> {
                 let block = create_block(&start, &current_block_entries, &now);
                 blocks.push(block);
 
-                if let Some(le) = &last_entry {
-                    if time_since_last > session_duration_ms {
-                        if let Some(gap) = create_gap_block(&le.timestamp, &entry_time) {
+                if let Some(le) = &last_entry
+                    && time_since_last > session_duration_ms
+                        && let Some(gap) = create_gap_block(&le.timestamp, &entry_time) {
                             blocks.push(gap);
                         }
-                    }
-                }
 
                 current_block_start = Some(floor_to_hour(&entry_time));
                 current_block_entries = vec![entry.clone()];
@@ -1035,11 +1029,10 @@ fn identify_session_blocks(entries: &[LoadedUsageEntry]) -> Vec<Value> {
         }
     }
 
-    if let Some(start) = current_block_start {
-        if !current_block_entries.is_empty() {
+    if let Some(start) = current_block_start
+        && !current_block_entries.is_empty() {
             blocks.push(create_block(&start, &current_block_entries, &now));
         }
-    }
 
     blocks
 }
@@ -1146,18 +1139,16 @@ fn filter_daily_range(
     start_date: Option<&str>,
     end_date: Option<&str>,
 ) -> Vec<LoadedUsageEntry> {
-    if let Some(sd) = start_date {
-        if let Ok(start) = NaiveDate::parse_from_str(sd, "%Y-%m-%d") {
+    if let Some(sd) = start_date
+        && let Ok(start) = NaiveDate::parse_from_str(sd, "%Y-%m-%d") {
             let start_dt = start.and_hms_opt(0, 0, 0).unwrap();
             entries.retain(|e| entry_naive(e) >= start_dt);
         }
-    }
-    if let Some(ed) = end_date {
-        if let Ok(end) = NaiveDate::parse_from_str(ed, "%Y-%m-%d") {
+    if let Some(ed) = end_date
+        && let Ok(end) = NaiveDate::parse_from_str(ed, "%Y-%m-%d") {
             let end_dt = end.and_hms_opt(0, 0, 0).unwrap() + Duration::days(1);
             entries.retain(|e| entry_naive(e) < end_dt);
         }
-    }
     entries
 }
 
@@ -1166,14 +1157,13 @@ fn filter_monthly_range(
     start_month: Option<&str>,
     end_month: Option<&str>,
 ) -> Vec<LoadedUsageEntry> {
-    if let Some(sm) = start_month {
-        if let Ok(start) = NaiveDate::parse_from_str(&format!("{}-01", sm), "%Y-%m-%d") {
+    if let Some(sm) = start_month
+        && let Ok(start) = NaiveDate::parse_from_str(&format!("{}-01", sm), "%Y-%m-%d") {
             let start_dt = start.and_hms_opt(0, 0, 0).unwrap();
             entries.retain(|e| entry_naive(e) >= start_dt);
         }
-    }
-    if let Some(em) = end_month {
-        if let Ok(end) = NaiveDate::parse_from_str(&format!("{}-01", em), "%Y-%m-%d") {
+    if let Some(em) = end_month
+        && let Ok(end) = NaiveDate::parse_from_str(&format!("{}-01", em), "%Y-%m-%d") {
             let next = if end.month() == 12 {
                 NaiveDate::from_ymd_opt(end.year() + 1, 1, 1)
             } else {
@@ -1184,7 +1174,6 @@ fn filter_monthly_range(
                 entries.retain(|e| entry_naive(e) < end_dt);
             }
         }
-    }
     entries
 }
 
@@ -1422,16 +1411,14 @@ async fn get_daily_usage(
     State(state): State<ApiState>,
     Query(q): Query<DailyQuery>,
 ) -> AppResult<Json<Value>> {
-    if let Some(s) = &q.start_date {
-        if !re_ymd(s) {
+    if let Some(s) = &q.start_date
+        && !re_ymd(s) {
             return Err(AppError::bad_request("Invalid start_date"));
         }
-    }
-    if let Some(s) = &q.end_date {
-        if !re_ymd(s) {
+    if let Some(s) = &q.end_date
+        && !re_ymd(s) {
             return Err(AppError::bad_request("Invalid end_date"));
         }
-    }
 
     let pp = q.project_path.as_deref();
     let cache_key = get_cache_key(
@@ -1475,16 +1462,14 @@ async fn get_monthly_usage(
     State(state): State<ApiState>,
     Query(q): Query<MonthlyQuery>,
 ) -> AppResult<Json<Value>> {
-    if let Some(s) = &q.start_month {
-        if !re_ym(s) {
+    if let Some(s) = &q.start_month
+        && !re_ym(s) {
             return Err(AppError::bad_request("Invalid start_month"));
         }
-    }
-    if let Some(s) = &q.end_month {
-        if !re_ym(s) {
+    if let Some(s) = &q.end_month
+        && !re_ym(s) {
             return Err(AppError::bad_request("Invalid end_month"));
         }
-    }
 
     let pp = q.project_path.as_deref();
     let cache_key = get_cache_key(

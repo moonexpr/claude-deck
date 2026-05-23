@@ -97,13 +97,12 @@ fn split_frontmatter(content: &str) -> Option<(String, String)> {
             Some(e) => (&after_open[idx..e], e + 1),
             None => return None, // no closing `---\n` → no match
         };
-        if let Some(rem) = line.strip_prefix("---") {
-            if rem.trim().is_empty() {
+        if let Some(rem) = line.strip_prefix("---")
+            && rem.trim().is_empty() {
                 let yaml_content = after_open[..idx.saturating_sub(1)].to_string();
                 let body = after_open[next_idx..].to_string();
                 return Some((yaml_content, body));
             }
-        }
         idx = next_idx;
     }
 }
@@ -168,11 +167,10 @@ fn parse_scalar(s: &str) -> Value {
             if let Ok(i) = s.parse::<i64>() {
                 return Value::Number(i.into());
             }
-            if let Ok(f) = s.parse::<f64>() {
-                if let Some(n) = serde_json::Number::from_f64(f) {
+            if let Ok(f) = s.parse::<f64>()
+                && let Some(n) = serde_json::Number::from_f64(f) {
                     return Value::Number(n);
                 }
-            }
             Value::String(unquote_scalar(s))
         }
     }
@@ -643,19 +641,17 @@ async fn create_command(
     }
 
     let mut metadata = Map::new();
-    if let Some(desc) = command.description.as_ref() {
-        if !desc.is_empty() {
+    if let Some(desc) = command.description.as_ref()
+        && !desc.is_empty() {
             metadata.insert("description".into(), Value::String(desc.clone()));
         }
-    }
-    if let Some(tools) = command.allowed_tools.as_ref() {
-        if !tools.is_empty() {
+    if let Some(tools) = command.allowed_tools.as_ref()
+        && !tools.is_empty() {
             metadata.insert(
                 "allowed-tools".into(),
                 Value::Array(tools.iter().cloned().map(Value::String).collect()),
             );
         }
-    }
 
     let frontmatter = build_frontmatter(&metadata);
     let full_content = format!("{}{}", frontmatter, command.content);

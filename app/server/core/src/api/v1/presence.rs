@@ -359,17 +359,13 @@ fn extract_exit_code(tool_result: &Value) -> Option<i64> {
     if let Some(ec) = tool_result.get("exit_code") {
         return ec.as_i64();
     }
-    if let Some(content) = tool_result.get("content").and_then(|v| v.as_str()) {
-        if content.to_lowercase().contains("exit code") {
-            if let Ok(re) = regex::Regex::new(r"(?i)exit code[:\s]+(\d+)") {
-                if let Some(c) = re.captures(content) {
-                    if let Some(m) = c.get(1) {
+    if let Some(content) = tool_result.get("content").and_then(|v| v.as_str())
+        && content.to_lowercase().contains("exit code")
+            && let Ok(re) = regex::Regex::new(r"(?i)exit code[:\s]+(\d+)")
+                && let Some(c) = re.captures(content)
+                    && let Some(m) = c.get(1) {
                         return m.as_str().parse::<i64>().ok();
                     }
-                }
-            }
-        }
-    }
     if tool_result
         .get("is_error")
         .and_then(|v| v.as_bool())
@@ -408,7 +404,7 @@ fn update_activity_buckets(s: &mut SessionRow, now: DateTime<Utc>) {
             buckets = vec![0; BUCKET_COUNT];
         } else {
             buckets = buckets[shift_u..].to_vec();
-            buckets.extend(std::iter::repeat(0).take(shift_u));
+            buckets.extend(std::iter::repeat_n(0, shift_u));
         }
         s.bucket_start = Some(iso(bucket_start + Duration::minutes(shift)));
         offset = BUCKET_COUNT as i64 - 1;
@@ -651,12 +647,11 @@ async fn process_event(pool: &SqlitePool, payload: &Value) -> AppResult<Value> {
                 };
                 let exit_code = extract_exit_code(&tool_result);
                 session.last_command_exit = exit_code;
-                if let Some(ec) = exit_code {
-                    if ec != 0 {
+                if let Some(ec) = exit_code
+                    && ec != 0 {
                         session.error_count += 1;
                         session.status = STATUS_ERROR.to_string();
                     }
-                }
                 session.status_text = Some("Ran command".to_string());
             } else {
                 session.status_text = Some(format!("Used tool: {}", tool_name));

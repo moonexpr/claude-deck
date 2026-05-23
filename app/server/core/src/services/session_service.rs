@@ -83,11 +83,10 @@ impl SessionService {
                     MAX_ENTRIES
                 ));
             }
-            if !line.trim().is_empty() {
-                if let Ok(json) = serde_json::from_str(&line) {
+            if !line.trim().is_empty()
+                && let Ok(json) = serde_json::from_str(&line) {
                     entries.push(json);
                 }
-            }
         }
 
         Ok(entries)

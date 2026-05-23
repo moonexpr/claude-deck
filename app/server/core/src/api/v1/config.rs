@@ -251,8 +251,8 @@ async fn get_merged_config(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<
 
     // user ~/.claude.json — top-level + per-project mcpServers
     let user_claude = paths::get_claude_user_config_file();
-    if user_claude.exists() {
-        if let Some(data) = read_json_file(&user_claude) {
+    if user_claude.exists()
+        && let Some(data) = read_json_file(&user_claude) {
             if let Some(srv) = data.get("mcpServers").and_then(obj) {
                 shallow_update(&mut mcp_servers, srv);
             }
@@ -264,51 +264,44 @@ async fn get_merged_config(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<
                 }
             }
         }
-    }
 
     // user settings.json
     let user_settings = paths::get_claude_user_settings_file();
-    if user_settings.exists() {
-        if let Some(data) = read_json_file(&user_settings) {
+    if user_settings.exists()
+        && let Some(data) = read_json_file(&user_settings) {
             if let Some(m) = obj(&data) {
                 shallow_update(&mut settings, m);
             }
-            if let Some(h) = data.get("hooks") {
-                if let Some(hm) = h.as_object() {
+            if let Some(h) = data.get("hooks")
+                && let Some(hm) = h.as_object() {
                     hooks = hm.clone();
                 }
-            }
             if let Some(p) = data.get("permissions").and_then(obj) {
                 shallow_update(&mut permissions, p);
             }
         }
-    }
 
     // user settings.local.json (overrides)
     let user_local = paths::get_claude_user_settings_local_file();
-    if user_local.exists() {
-        if let Some(data) = read_json_file(&user_local) {
-            if let Some(m) = obj(&data) {
+    if user_local.exists()
+        && let Some(data) = read_json_file(&user_local)
+            && let Some(m) = obj(&data) {
                 shallow_update(&mut settings, m);
             }
-        }
-    }
 
     if let Some(pp) = pp {
         let proj = PathBuf::from(pp);
 
         let mcp_json = proj.join(".mcp.json");
-        if mcp_json.exists() {
-            if let Some(data) = read_json_file(&mcp_json) {
-                if let Some(srv) = data.get("mcpServers").and_then(obj) {
+        if mcp_json.exists()
+            && let Some(data) = read_json_file(&mcp_json)
+                && let Some(srv) = data.get("mcpServers").and_then(obj) {
                     shallow_update(&mut mcp_servers, srv);
                 }
-            }
-        }
 
         let proj_settings = proj.join(".claude/settings.json");
-        if proj_settings.exists() {
-            if let Some(data) = read_json_file(&proj_settings) {
+        if proj_settings.exists()
+            && let Some(data) = read_json_file(&proj_settings) {
                 if let Some(m) = obj(&data) {
                     shallow_update(&mut settings, m);
                 }
@@ -321,16 +314,13 @@ async fn get_merged_config(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<
                     }
                 }
             }
-        }
 
         let proj_local = proj.join(".claude/settings.local.json");
-        if proj_local.exists() {
-            if let Some(data) = read_json_file(&proj_local) {
-                if let Some(m) = obj(&data) {
+        if proj_local.exists()
+            && let Some(data) = read_json_file(&proj_local)
+                && let Some(m) = obj(&data) {
                     shallow_update(&mut settings, m);
                 }
-            }
-        }
     }
 
     // commands
@@ -355,8 +345,8 @@ async fn get_merged_config(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<
 
     // agents (non-recursive *.md, stem)
     let agents_dir = paths::get_claude_user_agents_dir();
-    if agents_dir.exists() {
-        if let Ok(rd) = std::fs::read_dir(&agents_dir) {
+    if agents_dir.exists()
+        && let Ok(rd) = std::fs::read_dir(&agents_dir) {
             let mut stems: Vec<String> = rd
                 .flatten()
                 .map(|e| e.path())
@@ -366,11 +356,10 @@ async fn get_merged_config(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<
             stems.sort();
             agents.extend(stems.into_iter().map(Value::String));
         }
-    }
     if let Some(pp) = pp {
         let proj_agents = PathBuf::from(pp).join(".claude/agents");
-        if proj_agents.exists() {
-            if let Ok(rd) = std::fs::read_dir(&proj_agents) {
+        if proj_agents.exists()
+            && let Ok(rd) = std::fs::read_dir(&proj_agents) {
                 let mut stems: Vec<String> = rd
                     .flatten()
                     .map(|e| e.path())
@@ -384,7 +373,6 @@ async fn get_merged_config(Query(q): Query<ProjectPathQuery>) -> AppResult<Json<
                         .map(|s| Value::String(format!("project:{}", s))),
                 );
             }
-        }
     }
 
     let merged = json!({

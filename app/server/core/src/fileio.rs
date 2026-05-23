@@ -54,11 +54,10 @@ pub fn directory_exists(dir_path: &Path) -> bool {
 /// Shared atomic-write primitive: ensure parent, write to `<file>.tmp.<pid>`,
 /// rename over the target. Returns `false` on any failure.
 fn write_atomic(file_path: &Path, bytes: &[u8]) -> bool {
-    if let Some(parent) = file_path.parent() {
-        if std::fs::create_dir_all(parent).is_err() {
+    if let Some(parent) = file_path.parent()
+        && std::fs::create_dir_all(parent).is_err() {
             return false;
         }
-    }
     let tmp = match file_path.file_name() {
         Some(name) => {
             let mut t = name.to_os_string();

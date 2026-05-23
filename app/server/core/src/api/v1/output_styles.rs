@@ -201,9 +201,9 @@ fn unescape_double(s: &str) -> String {
 fn meta_get_str(meta: &[(String, Meta)], key: &str) -> Option<String> {
     meta.iter()
         .find(|(k, _)| k == key)
-        .and_then(|(_, v)| match v {
-            Meta::Str(s) => Some(s.clone()),
-            Meta::Bool(b) => Some(b.to_string()),
+        .map(|(_, v)| match v {
+            Meta::Str(s) => s.clone(),
+            Meta::Bool(b) => b.to_string(),
         })
 }
 
@@ -439,11 +439,10 @@ async fn create_output_style(
     paths::ensure_directory_exists(&base);
 
     let mut metadata: Vec<(String, Meta)> = Vec::new();
-    if let Some(d) = style.description.as_deref() {
-        if !d.is_empty() {
+    if let Some(d) = style.description.as_deref()
+        && !d.is_empty() {
             metadata.push(("description".into(), Meta::Str(d.to_string())));
         }
-    }
     if style.keep_coding_instructions {
         metadata.push((
             "keep-coding-instructions".into(),

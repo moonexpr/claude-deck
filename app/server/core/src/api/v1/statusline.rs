@@ -193,10 +193,10 @@ fn get_config() -> Value {
     let mut command: Option<String> = None;
     let mut padding: Option<i64> = None;
 
-    if settings_file.exists() {
-        if let Ok(text) = std::fs::read_to_string(&settings_file) {
-            if let Ok(settings) = serde_json::from_str::<Value>(&text) {
-                if let Some(sl) = settings.get("statusLine") {
+    if settings_file.exists()
+        && let Ok(text) = std::fs::read_to_string(&settings_file)
+            && let Ok(settings) = serde_json::from_str::<Value>(&text)
+                && let Some(sl) = settings.get("statusLine") {
                     // Python `if status_line:` is falsy for {}/null/false.
                     let truthy = match sl {
                         Value::Object(m) => !m.is_empty(),
@@ -220,18 +220,14 @@ fn get_config() -> Value {
                         padding = sl.get("padding").and_then(|v| v.as_i64());
                     }
                 }
-            }
-        }
-    }
 
     let mut script_content: Option<String> = None;
     if let Some(cmd) = command.as_deref() {
         let sp = expanduser(cmd);
-        if sp.exists() {
-            if let Ok(c) = std::fs::read_to_string(&sp) {
+        if sp.exists()
+            && let Ok(c) = std::fs::read_to_string(&sp) {
                 script_content = Some(c);
             }
-        }
     }
 
     json!({

@@ -448,15 +448,14 @@ async fn get_session_context(
                     let rchars = result_chars(&rc_val);
                     tool_result_chars += rchars;
 
-                    if let Some(tool_use_id) = block.get("tool_use_id").and_then(|v| v.as_str()) {
-                        if let Some(name) = tool_use_id_to_name.get(tool_use_id).cloned() {
+                    if let Some(tool_use_id) = block.get("tool_use_id").and_then(|v| v.as_str())
+                        && let Some(name) = tool_use_id_to_name.get(tool_use_id).cloned() {
                             let st = tool_stats.entry(name.clone()).or_insert_with(|| {
                                 tool_stats_order.push(name.clone());
                                 (0, 0)
                             });
                             st.1 += rchars;
                         }
-                    }
                 }
             }
         } else if entry_type == "assistant" {
@@ -517,9 +516,9 @@ async fn get_session_context(
                         }
                     }
 
-                    if tool_name == "Read" {
-                        if let Some(fp) = tool_input.get("file_path").and_then(|v| v.as_str()) {
-                            if !fp.is_empty() {
+                    if tool_name == "Read"
+                        && let Some(fp) = tool_input.get("file_path").and_then(|v| v.as_str())
+                            && !fp.is_empty() {
                                 file_reads
                                     .entry(fp.to_string())
                                     .or_insert_with(|| {
@@ -528,8 +527,6 @@ async fn get_session_context(
                                     })
                                     .0 += 1;
                             }
-                        }
-                    }
                 }
             }
 
@@ -599,11 +596,10 @@ async fn get_session_context(
                 if block.get("type").and_then(|v| v.as_str()) == Some("tool_result") {
                     let rc_val = block.get("content").cloned().unwrap_or(json!(""));
                     let char_count = result_chars(&rc_val);
-                    if let Some(p) = &pending_read_path {
-                        if let Some(fr) = file_reads.get_mut(p) {
+                    if let Some(p) = &pending_read_path
+                        && let Some(fr) = file_reads.get_mut(p) {
                             fr.1 += char_count;
                         }
-                    }
                     pending_read_path = None;
                     break;
                 }
