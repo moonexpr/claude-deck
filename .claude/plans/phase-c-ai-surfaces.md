@@ -117,20 +117,24 @@ No shared file overlap → safe parallel wave with `isaiah` (C4 logic), `david` 
 
 ---
 
-### C6 — CM6 for JSON surfaces (`david`)
+### C6 — CM6 for JSON surfaces (`david`) — **REDIRECTED 2026-05-23**
+
+**Original premise was wrong.** MCP and Permissions use structured field editors (Input + Select + Switch), not raw JSON textareas — verified by audit on 2026-05-23. The B4 implementation chose structured forms, a better UX, signed off at Phase-B gate. There is nothing editable to swap in those two features.
+
+**Redirected scope** (PROMPTER decision 2026-05-23): repurpose the slot to the open INBOX item "Extend CodeMirror 6 to read-only config JSON renders".
 
 **Targets:**
-- `app/web/src/features/mcp/...` — swap any `<textarea>` / `<JsonViewer>` editing surfaces for `<CodeEditor language="json" .../>`.
-- `app/web/src/features/permissions/...` — same.
-- `CodeEditor` already supports JSON (verified) — no library change.
+- `app/web/src/features/config/ConfigFileViewer.tsx` — swap the read-only JSON render (`JsonViewer` / `<pre>`) for `<CodeEditor language="json" />` in read-only mode. May require extending `CodeEditor` with a `readOnly` prop (one CM6 extension: `EditorState.readOnly.of(true)` + `EditorView.editable.of(false)`).
+- Close the corresponding INBOX entry in the same commit.
 
-**Out of scope:** the INBOX item "CM6 for *read-only* config renders" (separate request — leave as INBOX entry).
+**Out of scope (unchanged):**
+- Adding a "raw JSON mode" toggle to MCP/Permissions edit forms (the option-C path PROMPTER did not pick).
 
 **Validators:**
-- MCP edit dialog: JSON gets syntax highlighting, bracket matching, line numbers.
-- Permissions edit dialog: same.
-- Save round-trip preserves bytes (no CM6 reformat surprise).
-- Playwright: nav smoke green for `/mcp` and `/permissions`.
+- `/config` page: JSON config files render with CM6 syntax highlighting, bracket matching, line numbers.
+- No editing possible (readonly enforced).
+- Playwright: nav smoke green for `/config`.
+- INBOX entry "Extend CodeMirror 6 to read-only config JSON renders" marked **closed** (status: done, with commit hash) — not deleted.
 
 ---
 

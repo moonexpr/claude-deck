@@ -49,9 +49,9 @@ Post-Phase-B fixes from the PROMPTER's hands-on tailnet review: `server-bin` `FR
 - ✅ **C3** Chat panel feature + first `sqlx::migrate!`.
   - ✅ C3a server — `46329d7` · `3d0a393` · `004d04c`.
   - ✅ C3b frontend — `a61f89b` (types/api) · `98d8bf2` (list/transcript) · `abdbf56` (page + useChat) · `a7f5a16` (registry) · `d9db425` (Playwright). 40/40 e2e green.
-- 🔵 **C4** cc-bridge AI augmentation — split-pane terminal+AI, inline preview with [Send]/[Edit]/[Discard], zero auto-exec. — `isaiah` + `john`
-- 🔵 **C5** AI-assisted config editing — Agents page template + reusable `AI_SUGGEST_PATTERN.md`. — `david` + `isaiah`
-- 🔵 **C6** CM6 for JSON surfaces — MCP, Permissions edit dialogs. — `david`
+- ✅ **C4** cc-bridge AI augmentation — split-pane + `parseExecuteTags` + AISuggestPanel + zero-PTY-bytes-pre-Send Playwright gate. — `fb680c4` (parser+7 unit tests) · `fdda126` (panel) · `2cdc762` (split-pane) · `8de93c5` (gate test, 6/6 green)
+- ✅ **C5** Agents AI-suggest template + `AI_SUGGEST_PATTERN.md`. — `3ed7e01` (component) · `48a2d72` (mount) · `a93db5d` (pattern doc)
+- 🔵 **C6** Redirected per PROMPTER 2026-05-23: MCP/Permissions use structured forms (no editable JSON to swap). Repurposed to the open INBOX item: CM6 for **read-only** Config-viewer JSON (`features/config/ConfigFileViewer.tsx`). — `david`
 
 **Phase C gate (7):** (1) `useChat` streams, no `x-api-key` in browser · (2) Tauri keyring path works offline-after-key · (3) stub `<execute>` → zero PTY bytes pre-Send · (4) Agents AI-suggest → CM6 → PUT round-trip · (5) `sqlx::migrate!` applies cleanly to a fresh DB (data-loss explicitly permitted on existing DBs per PROMPTER policy 2026-05-22) · (6) Playwright sweep ≥65/65 · (7) `git diff main -- backend/ frontend/` empty.
 
