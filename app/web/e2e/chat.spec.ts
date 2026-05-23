@@ -138,4 +138,36 @@ test.describe("Chat page", () => {
     await expect(page).toHaveURL(/\/chat/);
     await expect(page.getByRole("heading", { name: "Chat" })).toBeVisible();
   });
+
+  test("browser fetch sends Origin header on /api/v1/chat requests", async ({ page }) => {
+    // The server now rejects absent-Origin on all /api/v1/ai/* and /api/v1/chat/*
+    // routes.  Browser fetch() always includes Origin on same-origin requests.
+    // This test asserts that the GET /api/v1/chat call made by ChatPage carries a
+    // non-empty Origin matching the page's own origin — guaranteeing the request
+    // would pass the server's is_same_origin check in production.
+    let capturedOrigin: string | null = null;
+
+    await stubShellApis(page);
+
+    // Intercept the chat list request, capture the Origin header, then fulfill.
+    await page.route("**/api/v1/chat", async (route) => {
+      capturedOrigin = route.request().headers()["origin"] ?? null;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ conversations: [] }),
+      });
+    });
+
+    await page.goto("/chat");
+    await expect(page.getByRole("heading", { name: "Chat" })).toBeVisible();
+
+    // The Origin must be present and must match the page's origin.
+    const pageOrigin = new URL(page.url()).origin;
+    expect(
+      capturedOrigin,
+      "GET /api/v1/chat must carry a non-empty Origin header"
+    ).not.toBeNull();
+    expect(capturedOrigin).toBe(pageOrigin);
+  });
 });
