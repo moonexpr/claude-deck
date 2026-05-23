@@ -1,3 +1,5 @@
+// Wire format mirrors the Python-era schema; collapsible_if patterns from faithful port are intentional.
+#![allow(clippy::collapsible_if)]
 // PORTED: agent_service.py + skills_registry_service.py + skill_dependency_service.py + api/v1/agents.py
 //
 // Faithful port. Paths via `crate::paths`, errors via `crate::error::AppError`
@@ -282,11 +284,10 @@ mod yaml_min {
         if let Ok(i) = s.parse::<i64>() {
             return Value::Number(i.into());
         }
-        if let Ok(f) = s.parse::<f64>() {
-            if let Some(n) = serde_json::Number::from_f64(f) {
+        if let Ok(f) = s.parse::<f64>()
+            && let Some(n) = serde_json::Number::from_f64(f) {
                 return Value::Number(n);
             }
-        }
         Value::String(s.to_string())
     }
 
@@ -336,13 +337,10 @@ mod yaml_min {
     }
 
     fn dump_value(value: &Value, indent: usize, out: &mut String, _inline: bool) {
-        match value {
-            Value::Object(m) => {
-                for (k, v) in m {
-                    dump_kv(k, v, indent, out);
-                }
+        if let Value::Object(m) = value {
+            for (k, v) in m {
+                dump_kv(k, v, indent, out);
             }
-            _ => {}
         }
     }
 
@@ -504,7 +502,7 @@ fn mget<'a>(m: &'a Value, key: &str) -> Option<&'a Value> {
 }
 
 /// Python `metadata.get(a) or metadata.get(b)` — falsy (null/"") falls through.
-fn truthy<'a>(v: Option<&'a Value>) -> Option<&'a Value> {
+fn truthy(v: Option<&Value>) -> Option<&Value> {
     match v {
         Some(Value::Null) | None => None,
         Some(Value::String(s)) if s.is_empty() => None,
@@ -634,15 +632,13 @@ fn get_installed_plugins() -> Vec<Value> {
             if let Some(arr) = installs.as_array() {
                 for install in arr {
                     if let Some(install_path) = install.get("installPath").and_then(|v| v.as_str())
-                    {
-                        if Path::new(install_path).exists() {
+                        && Path::new(install_path).exists() {
                             plugins.push(json!({
                                 "name": plugin_name,
                                 "path": install_path,
                                 "scope": install.get("scope").and_then(|v| v.as_str()).unwrap_or("user"),
                             }));
                         }
-                    }
                 }
             }
         }
@@ -764,11 +760,10 @@ fn service_get_agent(
 }
 
 fn ensure_agent_memory_dir(agent_name: &str, memory_scope: Option<&str>) {
-    if let Some(scope) = memory_scope {
-        if !scope.is_empty() && scope != "none" {
+    if let Some(scope) = memory_scope
+        && !scope.is_empty() && scope != "none" {
             paths::ensure_directory_exists(&agent_memory_dir(agent_name));
         }
-    }
 }
 
 // ============================================================================
@@ -892,13 +887,12 @@ fn scan_skills_dir(base_dir: &Path, location: &str) -> Vec<Value> {
                     .file_name()
                     .map(|s| s.to_string_lossy().into_owned())
                     .unwrap_or_default();
-                if sub_skill.exists() && !seen_names.contains(&sub_name) {
-                    if let Ok(content) = std::fs::read_to_string(&sub_skill) {
+                if sub_skill.exists() && !seen_names.contains(&sub_name)
+                    && let Ok(content) = std::fs::read_to_string(&sub_skill) {
                         let (metadata, _) = parse_frontmatter(&content);
                         seen_names.insert(sub_name.clone());
                         skills.push(make_skill(&sub_name, &metadata, location, None));
                     }
-                }
             }
             continue;
         }
@@ -1086,8 +1080,8 @@ fn dep_get_skill_dir(name: &str, location: &str, project_path: Option<&str>) -> 
         let data: Value = serde_json::from_str(&text).ok()?;
         if let Some(plugins) = data.get("plugins").and_then(|p| p.as_object()) {
             for (key, installs) in plugins {
-                if key.starts_with(&format!("{}@", plugin_name)) || key == plugin_name {
-                    if let Some(arr) = installs.as_array() {
+                if (key.starts_with(&format!("{}@", plugin_name)) || key == plugin_name)
+                    && let Some(arr) = installs.as_array() {
                         for install in arr {
                             if let Some(install_path) =
                                 install.get("installPath").and_then(|v| v.as_str())
@@ -1100,7 +1094,6 @@ fn dep_get_skill_dir(name: &str, location: &str, project_path: Option<&str>) -> 
                             }
                         }
                     }
-                }
             }
         }
         None
@@ -1132,8 +1125,8 @@ fn which(name: &str, enable_external_tools: bool) -> Option<PathBuf> {
     let path_var = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path_var) {
         let candidate = dir.join(name);
-        if let Ok(meta) = std::fs::metadata(&candidate) {
-            if meta.is_file() {
+        if let Ok(meta) = std::fs::metadata(&candidate)
+            && meta.is_file() {
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
@@ -1146,7 +1139,6 @@ fn which(name: &str, enable_external_tools: bool) -> Option<PathBuf> {
                     return Some(candidate);
                 }
             }
-        }
     }
     None
 }
@@ -1187,8 +1179,8 @@ fn check_binary(name: &str, enable_external_tools: bool) -> (bool, Option<String
     }
     let mut version = None;
     for flag in ["--version", "-v", "version"] {
-        if let Some(out) = run_cmd(name, &[flag], 5, None) {
-            if out.status.success() {
+        if let Some(out) = run_cmd(name, &[flag], 5, None)
+            && out.status.success() {
                 let s = String::from_utf8_lossy(&out.stdout);
                 let trimmed = s.trim();
                 if !trimmed.is_empty() {
@@ -1196,17 +1188,16 @@ fn check_binary(name: &str, enable_external_tools: bool) -> (bool, Option<String
                     break;
                 }
             }
-        }
     }
     (true, version)
 }
 
 fn check_npm_package(name: &str) -> (bool, Option<String>) {
-    if let Some(out) = run_cmd("npm", &["list", "-g", name, "--json"], 15, None) {
-        if out.status.success() {
-            if let Ok(data) = serde_json::from_slice::<Value>(&out.stdout) {
-                if let Some(deps) = data.get("dependencies").and_then(|d| d.as_object()) {
-                    if let Some(entry) = deps.get(name) {
+    if let Some(out) = run_cmd("npm", &["list", "-g", name, "--json"], 15, None)
+        && out.status.success()
+            && let Ok(data) = serde_json::from_slice::<Value>(&out.stdout)
+                && let Some(deps) = data.get("dependencies").and_then(|d| d.as_object())
+                    && let Some(entry) = deps.get(name) {
                         return (
                             true,
                             entry
@@ -1215,10 +1206,6 @@ fn check_npm_package(name: &str) -> (bool, Option<String>) {
                                 .map(String::from),
                         );
                     }
-                }
-            }
-        }
-    }
     (false, None)
 }
 
@@ -1237,16 +1224,14 @@ fn pip_show(cmd: &str, name: &str) -> Option<(bool, Option<String>)> {
 }
 
 fn check_pip_package(name: &str, enable_external_tools: bool) -> (bool, Option<String>) {
-    if which("pip", enable_external_tools).is_some() {
-        if let Some(r) = pip_show("pip", name) {
+    if which("pip", enable_external_tools).is_some()
+        && let Some(r) = pip_show("pip", name) {
             return r;
         }
-    }
-    if which("pip3", enable_external_tools).is_some() {
-        if let Some(r) = pip_show("pip3", name) {
+    if which("pip3", enable_external_tools).is_some()
+        && let Some(r) = pip_show("pip3", name) {
             return r;
         }
-    }
     (false, None)
 }
 
@@ -1270,16 +1255,15 @@ fn check_dependencies(
     let mut has_install_script = false;
     let mut install_script_path: Value = Value::Null;
 
-    if let Some(skill_file) = dep_get_skill_file(name, location, project_path) {
-        if let Ok(content) = std::fs::read_to_string(&skill_file) {
+    if let Some(skill_file) = dep_get_skill_file(name, location, project_path)
+        && let Ok(content) = std::fs::read_to_string(&skill_file) {
             let metadata = dep_parse_frontmatter(&content);
 
             let mut openclaw_meta = json!({});
-            if let Some(meta) = metadata.get("metadata") {
-                if meta.is_object() {
+            if let Some(meta) = metadata.get("metadata")
+                && meta.is_object() {
                     openclaw_meta = meta.get("openclaw").cloned().unwrap_or_else(|| json!({}));
                 }
-            }
 
             let mut requires = openclaw_meta
                 .get("requires")
@@ -1291,11 +1275,10 @@ fn check_dependencies(
                 .cloned()
                 .unwrap_or_default();
 
-            if requires.as_object().map(|o| o.is_empty()).unwrap_or(true) {
-                if let Some(r) = metadata.get("requires") {
+            if requires.as_object().map(|o| o.is_empty()).unwrap_or(true)
+                && let Some(r) = metadata.get("requires") {
                     requires = r.clone();
                 }
-            }
 
             let bins = requires
                 .get("bins")
@@ -1365,8 +1348,8 @@ fn check_dependencies(
                         .cloned()
                         .unwrap_or_default();
                     for b in &check_bins {
-                        if let Some(bin_name) = b.as_str() {
-                            if !dependencies
+                        if let Some(bin_name) = b.as_str()
+                            && !dependencies
                                 .iter()
                                 .any(|d| d["name"].as_str() == Some(bin_name))
                             {
@@ -1374,12 +1357,10 @@ fn check_dependencies(
                                     check_binary(bin_name, enable_external_tools);
                                 dependencies.push(dep_obj("bin", bin_name, installed, version));
                             }
-                        }
                     }
                 }
             }
         }
-    }
 
     if let Some(skill_dir) = dep_get_skill_dir(name, location, project_path) {
         for script_name in ["scripts/install.sh", "install.sh", "setup.sh"] {
@@ -1456,11 +1437,10 @@ fn list_supporting_files(name: &str, location: &str, project_path: Option<&str>)
         #[cfg(unix)]
         if !is_script {
             use std::os::unix::fs::PermissionsExt;
-            if let Ok(meta) = std::fs::metadata(&path) {
-                if meta.permissions().mode() & 0o111 != 0 {
+            if let Ok(meta) = std::fs::metadata(&path)
+                && meta.permissions().mode() & 0o111 != 0 {
                     is_script = true;
                 }
-            }
         }
         let size_bytes = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
         files.push(json!({
@@ -1500,8 +1480,8 @@ fn install_dependencies(
         .cloned()
         .unwrap_or_default();
 
-    if status["has_install_script"].as_bool().unwrap_or(false) {
-        if let Some(sp) = status["install_script_path"].as_str() {
+    if status["has_install_script"].as_bool().unwrap_or(false)
+        && let Some(sp) = status["install_script_path"].as_str() {
             let script_path = PathBuf::from(sp);
             let script_name = script_path
                 .file_name()
@@ -1545,7 +1525,6 @@ fn install_dependencies(
                 }
             }
         }
-    }
 
     for dep in &deps {
         if dep["installed"].as_bool().unwrap_or(false) || dep["kind"].as_str() != Some("npm") {
@@ -1725,15 +1704,12 @@ fn parse_homepage_skills(html: &str) -> Vec<Value> {
 }
 
 async fn get_homepage_skills(force_refresh: bool) -> Vec<Value> {
-    if !force_refresh {
-        if let Ok(guard) = home_cache().lock() {
-            if let Some((data, t)) = guard.as_ref() {
-                if (now_secs() - t) < CACHE_TTL_SECONDS {
+    if !force_refresh
+        && let Ok(guard) = home_cache().lock()
+            && let Some((data, t)) = guard.as_ref()
+                && (now_secs() - t) < CACHE_TTL_SECONDS {
                     return data.clone();
                 }
-            }
-        }
-    }
 
     let fetched: Option<String> = async {
         let client = reqwest::Client::builder()
@@ -1751,19 +1727,17 @@ async fn get_homepage_skills(force_refresh: bool) -> Vec<Value> {
     match fetched {
         Some(html) => {
             let skills = parse_homepage_skills(&html);
-            if !skills.is_empty() {
-                if let Ok(mut guard) = home_cache().lock() {
+            if !skills.is_empty()
+                && let Ok(mut guard) = home_cache().lock() {
                     *guard = Some((skills.clone(), now_secs()));
                 }
-            }
             skills
         }
         None => {
-            if let Ok(guard) = home_cache().lock() {
-                if let Some((data, _)) = guard.as_ref() {
+            if let Ok(guard) = home_cache().lock()
+                && let Some((data, _)) = guard.as_ref() {
                     return data.clone();
                 }
-            }
             Vec::new()
         }
     }
@@ -1774,13 +1748,11 @@ async fn search_skills(query: &str, limit: i64) -> Vec<Value> {
         return Vec::new();
     }
     let cache_key = format!("{}:{}", query, limit);
-    if let Ok(guard) = search_cache().lock() {
-        if let Some((data, t)) = guard.get(&cache_key) {
-            if (now_secs() - t) < SEARCH_CACHE_TTL_SECONDS {
+    if let Ok(guard) = search_cache().lock()
+        && let Some((data, t)) = guard.get(&cache_key)
+            && (now_secs() - t) < SEARCH_CACHE_TTL_SECONDS {
                 return data.clone();
             }
-        }
-    }
 
     let fetched: Option<Value> = async {
         let client: reqwest::Client = reqwest::Client::builder()
@@ -1831,11 +1803,10 @@ async fn search_skills(query: &str, limit: i64) -> Vec<Value> {
             skills
         }
         None => {
-            if let Ok(guard) = search_cache().lock() {
-                if let Some((data, _)) = guard.get(&cache_key) {
+            if let Ok(guard) = search_cache().lock()
+                && let Some((data, _)) = guard.get(&cache_key) {
                     return data.clone();
                 }
-            }
             Vec::new()
         }
     }
@@ -1884,11 +1855,10 @@ fn clean_terminal_output(text: &str) -> String {
         if stripped.is_empty() {
             continue;
         }
-        if let Some(re) = &spinner_re {
-            if re.is_match(stripped) {
+        if let Some(re) = &spinner_re
+            && re.is_match(stripped) {
                 continue;
             }
-        }
         let mut s = stripped.to_string();
         if let Some(re) = &box_re {
             s = re.replace(&s, "").into_owned();
@@ -1926,12 +1896,11 @@ fn install_skill_registry(
     if global_install {
         args.push("--global".into());
     }
-    if let Some(names) = skill_names {
-        if !names.is_empty() {
+    if let Some(names) = skill_names
+        && !names.is_empty() {
             args.push("--skill".into());
             args.push(names.join(","));
         }
-    }
     let cwd = if project_path.is_some() && !global_install {
         project_path
     } else {
@@ -2332,48 +2301,39 @@ async fn create_agent(
     paths::ensure_directory_exists(&base_dir);
 
     let mut metadata = Map::new();
-    if let Some(d) = &agent.description {
-        if !d.is_empty() {
+    if let Some(d) = &agent.description
+        && !d.is_empty() {
             metadata.insert("description".into(), json!(d));
         }
-    }
-    if let Some(t) = &agent.tools {
-        if !t.is_empty() {
+    if let Some(t) = &agent.tools
+        && !t.is_empty() {
             metadata.insert("tools".into(), json!(t));
         }
-    }
-    if let Some(m) = &agent.model {
-        if !m.is_empty() {
+    if let Some(m) = &agent.model
+        && !m.is_empty() {
             metadata.insert("model".into(), json!(m));
         }
-    }
-    if let Some(dt) = &agent.disallowed_tools {
-        if !dt.is_empty() {
+    if let Some(dt) = &agent.disallowed_tools
+        && !dt.is_empty() {
             metadata.insert("disallowed-tools".into(), json!(dt));
         }
-    }
-    if let Some(pm) = &agent.permission_mode {
-        if !pm.is_empty() {
+    if let Some(pm) = &agent.permission_mode
+        && !pm.is_empty() {
             metadata.insert("permission-mode".into(), json!(pm));
         }
-    }
-    if let Some(sk) = &agent.skills {
-        if !sk.is_empty() {
+    if let Some(sk) = &agent.skills
+        && !sk.is_empty() {
             metadata.insert("skills".into(), json!(sk));
         }
-    }
-    if let Some(h) = &agent.hooks {
-        if !h.is_null() && !(h.is_object() && h.as_object().unwrap().is_empty()) {
-            if let Some(hd) = hooks_to_dict(h) {
+    if let Some(h) = &agent.hooks
+        && !h.is_null() && !(h.is_object() && h.as_object().unwrap().is_empty())
+            && let Some(hd) = hooks_to_dict(h) {
                 metadata.insert("hooks".into(), hd);
             }
-        }
-    }
-    if let Some(mem) = &agent.memory {
-        if !mem.is_empty() {
+    if let Some(mem) = &agent.memory
+        && !mem.is_empty() {
             metadata.insert("memory".into(), json!(mem));
         }
-    }
 
     let frontmatter = build_frontmatter(&metadata);
     let full_content = format!("{}{}", frontmatter, agent.prompt);

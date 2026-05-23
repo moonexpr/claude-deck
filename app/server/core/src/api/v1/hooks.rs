@@ -1,3 +1,5 @@
+// Wire format mirrors the Python-era schema; field names intentionally camelCase.
+#![allow(non_snake_case)]
 // PORTED: hook_service.py + api/v1/hooks.py
 
 use axum::{
@@ -196,7 +198,7 @@ fn read_settings(file: &std::path::Path) -> Option<Value> {
 fn write_settings(file: &std::path::Path, settings: &Value) -> std::io::Result<()> {
     // Python: json.dump(settings, f, indent=2)
     let serialized = serde_json::to_string_pretty(settings)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        .map_err(|e| std::io::Error::other(e))?;
     std::fs::write(file, serialized)
 }
 
@@ -281,22 +283,20 @@ fn collect_hooks(project_path: Option<&str>) -> Vec<Value> {
     let mut hooks = Vec::new();
 
     let user_settings_file = paths::get_claude_user_settings_file();
-    if user_settings_file.exists() {
-        if let Some(data) = read_settings(&user_settings_file) {
+    if user_settings_file.exists()
+        && let Some(data) = read_settings(&user_settings_file) {
             let section = data.get("hooks").cloned().unwrap_or_else(|| json!({}));
             iter_hooks_from_settings(&section, "user", &mut hooks);
         }
-    }
 
     if let Some(pp) = project_path {
         let project_settings_file =
             paths::get_project_settings_file(Some(pp), std::path::Path::new(""));
-        if project_settings_file.exists() {
-            if let Some(data) = read_settings(&project_settings_file) {
+        if project_settings_file.exists()
+            && let Some(data) = read_settings(&project_settings_file) {
                 let section = data.get("hooks").cloned().unwrap_or_else(|| json!({}));
                 iter_hooks_from_settings(&section, "project", &mut hooks);
             }
-        }
     }
 
     hooks
@@ -371,11 +371,10 @@ async fn create_hook(
     let hook_id = gen_uuid_v4();
     let settings_file = settings_file_for_scope(&hook.scope, q.project_path.as_deref());
 
-    if let Some(parent) = settings_file.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
+    if let Some(parent) = settings_file.parent()
+        && let Err(e) = std::fs::create_dir_all(parent) {
             return Err(AppError::internal(format!("Failed to create hook: {}", e)));
         }
-    }
 
     let mut settings: Value = if settings_file.exists() {
         match read_settings(&settings_file) {
@@ -451,14 +450,13 @@ async fn create_hook(
 
     let mut target_idx: Option<usize> = None;
     for (i, group) in event_groups.iter().enumerate() {
-        if let Some(g) = group.as_object() {
-            if g.contains_key("hooks")
+        if let Some(g) = group.as_object()
+            && g.contains_key("hooks")
                 && g.get("matcher").and_then(|v| v.as_str()).unwrap_or("") == matcher
             {
                 target_idx = Some(i);
                 break;
             }
-        }
     }
 
     let idx = match target_idx {
@@ -508,24 +506,22 @@ async fn update_hook(
     if !["user", "project"].contains(&q.scope.as_str()) {
         return Err(AppError::bad_request("Scope must be 'user' or 'project'"));
     }
-    if let Some(t) = hook_update.r#type.as_deref() {
-        if !["command", "prompt", "agent", "http"].contains(&t) {
+    if let Some(t) = hook_update.r#type.as_deref()
+        && !["command", "prompt", "agent", "http"].contains(&t) {
             return Err(AppError::bad_request(
                 "Hook type must be 'command', 'prompt', 'agent', or 'http'",
             ));
         }
-    }
 
     // HookService.update_hook: invalid event -> ValueError -> 500.
-    if let Some(ev) = hook_update.event.as_deref() {
-        if !ev.is_empty() && !VALID_HOOK_EVENTS.contains(&ev) {
+    if let Some(ev) = hook_update.event.as_deref()
+        && !ev.is_empty() && !VALID_HOOK_EVENTS.contains(&ev) {
             return Err(AppError::internal(format!(
                 "Failed to update hook: Invalid event type: {}. Valid types: {}",
                 ev,
                 VALID_HOOK_EVENTS.join(", ")
             )));
         }
-    }
 
     let settings_file = settings_file_for_scope(&q.scope, q.project_path.as_deref());
     if !settings_file.exists() {
