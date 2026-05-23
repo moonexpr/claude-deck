@@ -6,7 +6,7 @@
 ///   - 404  → FAIL (route not mounted)
 ///   - 500  → FAIL (handler panicked or internal error; stop and report)
 ///   - 200  → PASS (normal / stub families)
-///   - 501  → PASS only for POST /api/v1/ai/chat (documented stub)
+///   - 503  → PASS for POST /api/v1/ai/chat when anthropic_api_key is None
 ///   - Other 4xx → only acceptable if that is the endpoint's genuine contract
 ///
 /// Families covered (22 total):
@@ -33,6 +33,7 @@ fn make_config(tmp: &std::path::Path) -> server_core::ServerConfig {
         frontend_dist_path: None,
         presence_public_url: None,
         anthropic_api_key: None,
+        anthropic_base_url: "https://api.anthropic.com".to_string(),
         enable_external_tools: false,
         cwd_fallback: tmp.to_path_buf(),
     }
@@ -120,16 +121,18 @@ async fn all_route_families_mounted_and_respond() {
         assert_eq!(code, 200, "GET /api/v1/agents");
     }
 
-    // ---- ai: POST /api/v1/ai/chat → 501 (documented stub) -----------------
+    // ---- ai: POST /api/v1/ai/chat → 503 when no anthropic_api_key -----------
+    // The stub (501) was replaced in Phase C C1 with the real proxy handler.
+    // With no key configured the handler returns 503 Service Unavailable.
     {
         let req = axum::http::Request::builder()
             .method("POST")
             .uri("/api/v1/ai/chat")
             .header("content-type", "application/json")
-            .body(Body::from("{}"))
+            .body(Body::from(r#"{"messages":[]}"#))
             .unwrap();
         let resp = router.clone().oneshot(req).await.expect("POST /api/v1/ai/chat");
-        assert_eq!(resp.status().as_u16(), 501, "POST /api/v1/ai/chat should be 501");
+        assert_eq!(resp.status().as_u16(), 503, "POST /api/v1/ai/chat should be 503 (no key)");
     }
 
     // ---- backup: GET /api/v1/backup/list → 200 -----------------------------
@@ -303,6 +306,7 @@ async fn spa_fallback_returns_200_for_client_routes() {
         frontend_dist_path: Some(dist.clone()),
         presence_public_url: None,
         anthropic_api_key: None,
+        anthropic_base_url: "https://api.anthropic.com".to_string(),
         enable_external_tools: false,
         cwd_fallback: tmp.clone(),
     };

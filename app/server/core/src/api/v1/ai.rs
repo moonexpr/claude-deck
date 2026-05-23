@@ -1,45 +1,231 @@
-// A7 scaffold: AI chat stub route.
-//
-// POST /api/v1/ai/chat → HTTP 501 Not Implemented.
-//
-// The handler reads `anthropic_api_key` from `ApiState` (set once by the
-// embedder; never via `std::env`). The 501 body carries a diagnostic boolean
-// so clients can distinguish "no key configured" from "key present but proxy
-// not built yet". The real Anthropic streaming proxy lands in Phase C (C1).
+/// AI proxy handlers — Phase C, task C1.
+///
+/// POST /api/v1/ai/chat    — streaming chat via Vercel Data Stream Protocol v1
+/// POST /api/v1/ai/suggest — single-shot non-streaming suggestion
+///
+/// Security: same-origin check reused from cc_bridge (see note below).
+/// Key source: `ApiState.anthropic_api_key` only — never std::env.
+///
+/// Same-origin parity with cc-bridge; auth hardening tracked in
+/// docs/requests/INBOX.md
 
 use axum::{
+    body::Body,
     extract::State,
-    http::StatusCode,
+    http::{HeaderMap, Response, StatusCode},
     response::IntoResponse,
     routing::post,
     Json, Router,
 };
-use serde::Serialize;
+use bytes::Bytes;
+use futures::StreamExt;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
 
 use crate::api::v1::ApiState;
+use crate::cc_bridge::is_same_origin;
+use crate::services::ai::{anthropic, proxy, Message};
+
+// ---------------------------------------------------------------------------
+// Request / response types
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct AiRequest {
+    messages: Vec<Message>,
+    #[serde(default)]
+    model: Option<String>,
+}
+
+/// Generic error body. Fields are present only when relevant to the error type.
+#[derive(Serialize)]
+struct ErrorBody {
+    status: &'static str,
+    detail: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    anthropic_key_configured: Option<bool>,
+    /// Always null when present (indicates no key source is configured).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    key_source: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status_code: Option<u16>,
+}
 
 #[derive(Serialize)]
-struct AiChatStubResponse {
-    status: &'static str,
-    detail: &'static str,
-    anthropic_key_configured: bool,
+struct SuggestResponse {
+    text: String,
+    usage: SuggestUsage,
 }
 
-/// POST /ai/chat
-///
-/// Stub handler. Returns 501 with a JSON diagnostic body. The
-/// `anthropic_key_configured` field lets the client surface a meaningful
-/// disabled-state message without guessing why chat is unavailable.
-async fn post_chat(State(state): State<ApiState>) -> impl IntoResponse {
-    let key_present = state.anthropic_api_key.is_some();
-    let body = AiChatStubResponse {
-        status: "not_implemented",
-        detail: "AI chat proxy lands in Phase C (C1)",
-        anthropic_key_configured: key_present,
-    };
-    (StatusCode::NOT_IMPLEMENTED, Json(body))
+#[derive(Serialize)]
+struct SuggestUsage {
+    input_tokens: u64,
+    output_tokens: u64,
 }
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+/// Parse an upstream error string produced by the anthropic service layer.
+/// Format: "upstream_error|<status_code>|<detail>"
+fn parse_upstream_error(err: &str) -> (u16, String) {
+    if let Some(rest) = err.strip_prefix("upstream_error|") {
+        if let Some((code_str, detail)) = rest.split_once('|') {
+            if let Ok(code) = code_str.parse::<u16>() {
+                return (code, detail.to_string());
+            }
+        }
+    }
+    (502, err.to_string())
+}
+
+fn upstream_error_response(err: &str) -> Response<Body> {
+    let (code, detail) = parse_upstream_error(err);
+    let body = ErrorBody {
+        status: "upstream_error",
+        detail,
+        anthropic_key_configured: None,
+        key_source: None,
+        status_code: Some(code),
+    };
+    (StatusCode::BAD_GATEWAY, Json(body)).into_response()
+}
+
+fn forbidden_response() -> Response<Body> {
+    let body = ErrorBody {
+        status: "forbidden",
+        detail: "same-origin check failed".to_string(),
+        anthropic_key_configured: None,
+        key_source: None,
+        status_code: None,
+    };
+    (StatusCode::FORBIDDEN, Json(body)).into_response()
+}
+
+fn no_key_response() -> Response<Body> {
+    let body = ErrorBody {
+        status: "unavailable",
+        detail: "anthropic_api_key not configured".to_string(),
+        anthropic_key_configured: Some(false),
+        key_source: Some(serde_json::Value::Null),
+        status_code: None,
+    };
+    (StatusCode::SERVICE_UNAVAILABLE, Json(body)).into_response()
+}
+
+fn same_origin_ok(headers: &HeaderMap) -> bool {
+    let origin = headers
+        .get("origin")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    // An absent Origin is treated as same-origin for non-browser callers
+    // (e.g. server-to-server, tests). Only reject when an Origin is present
+    // but does not match the Host.
+    origin.is_empty() || is_same_origin(origin, headers)
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/ai/chat — streaming
+// ---------------------------------------------------------------------------
+
+async fn post_chat(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(req): Json<AiRequest>,
+) -> Response<Body> {
+    if !same_origin_ok(&headers) {
+        return forbidden_response();
+    }
+
+    let api_key = match &state.anthropic_api_key {
+        Some(k) => k.clone(),
+        None => return no_key_response(),
+    };
+
+    let client = Client::new();
+    let base_url = state.anthropic_base_url.clone();
+    let model = req.model.clone();
+
+    let event_stream = match anthropic::stream_messages(
+        client,
+        base_url,
+        api_key,
+        model,
+        req.messages,
+    )
+    .await
+    {
+        Ok(s) => s,
+        Err(e) => return upstream_error_response(&e.to_string()),
+    };
+
+    // Transform Anthropic SSE events → Vercel Data Stream frames.
+    let data_stream =
+        proxy::anthropic_sse_to_data_stream(event_stream).map(Ok::<Bytes, std::convert::Infallible>);
+    let body = Body::from_stream(data_stream);
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "text/plain; charset=utf-8")
+        .header("x-vercel-ai-data-stream", "v1")
+        .header("cache-control", "no-cache")
+        .header("transfer-encoding", "chunked")
+        .body(body)
+        .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/ai/suggest — non-streaming
+// ---------------------------------------------------------------------------
+
+async fn post_suggest(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    Json(req): Json<AiRequest>,
+) -> Response<Body> {
+    if !same_origin_ok(&headers) {
+        return forbidden_response();
+    }
+
+    let api_key = match &state.anthropic_api_key {
+        Some(k) => k.clone(),
+        None => return no_key_response(),
+    };
+
+    let client = Client::new();
+    let base_url = state.anthropic_base_url.clone();
+    let model = req.model.clone();
+
+    match anthropic::complete_messages(
+        client,
+        base_url,
+        api_key,
+        model,
+        req.messages,
+    )
+    .await
+    {
+        Ok((text, usage)) => {
+            let resp = SuggestResponse {
+                text,
+                usage: SuggestUsage {
+                    input_tokens: usage.input_tokens,
+                    output_tokens: usage.output_tokens,
+                },
+            };
+            (StatusCode::OK, Json(resp)).into_response()
+        }
+        Err(e) => upstream_error_response(&e.to_string()),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Router
+// ---------------------------------------------------------------------------
 
 pub fn router() -> Router<ApiState> {
-    Router::new().route("/chat", post(post_chat))
+    Router::new()
+        .route("/chat", post(post_chat))
+        .route("/suggest", post(post_suggest))
 }

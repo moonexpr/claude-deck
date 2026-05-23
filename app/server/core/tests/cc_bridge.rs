@@ -56,6 +56,7 @@ async fn start_server() -> String {
         frontend_dist_path: None,
         presence_public_url: None,
         anthropic_api_key: None,
+        anthropic_base_url: "https://api.anthropic.com".to_string(),
         enable_external_tools: false,
         cwd_fallback: tmp.clone(),
     };
