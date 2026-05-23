@@ -27,12 +27,17 @@ use crate::services::ai::Message;
 // Same-origin helper (same policy as ai.rs)
 // ---------------------------------------------------------------------------
 
+/// Origin required for all requests; aligns with cc-bridge WS policy and ai.rs.
+///
+/// Absent or empty Origin → 403. Every legitimate Deck client (browser, Tauri)
+/// sends Origin. An absent header indicates a non-browser caller that must be
+/// rejected for CSRF parity.
 fn same_origin_ok(headers: &HeaderMap) -> bool {
     let origin = headers
         .get("origin")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    origin.is_empty() || is_same_origin(origin, headers)
+    !origin.is_empty() && is_same_origin(origin, headers)
 }
 
 // ---------------------------------------------------------------------------
@@ -108,15 +113,7 @@ fn validate_and_serialize_messages(
     messages: &[Message],
 ) -> Result<String, (StatusCode, Json<ErrorBody>)> {
     for (i, msg) in messages.iter().enumerate() {
-        if msg.role.is_empty() {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(ErrorBody {
-                    status: "bad_request",
-                    detail: format!("messages[{}].role must not be empty", i),
-                }),
-            ));
-        }
+        // role is now a validated enum — no empty-string check needed.
         if msg.content.is_empty() {
             return Err((
                 StatusCode::BAD_REQUEST,
@@ -347,11 +344,10 @@ async fn update_conversation(
     }
 
     // Validate title if provided.
-    if let Some(ref t) = req.title {
-        if let Err(e) = validate_title(t) {
+    if let Some(ref t) = req.title
+        && let Err(e) = validate_title(t) {
             return e.into_response();
         }
-    }
 
     // Validate messages if provided.
     let messages_json_opt = if let Some(ref msgs) = req.messages {
