@@ -43,7 +43,7 @@ request extends CM6 to the *read-only* config-viewer renders, which C6 does not
 currently cover. Whoever picks this up should decide whether to fold it into
 C6's scope or keep it a separate follow-up.
 
-**Status:** open
+**Status:** closed — C6-redirect, commit 8e6db4b
 
 ---
 
