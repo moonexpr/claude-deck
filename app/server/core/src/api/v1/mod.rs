@@ -6,9 +6,12 @@ pub mod usage;
 pub mod hooks;
 pub mod status;
 pub mod agents;
+pub mod ai;
 pub mod backup;
+pub mod chat;
 pub mod cli;
 pub mod commands;
+pub mod context;
 pub mod mcp;
 pub mod memory;
 pub mod output_styles;
@@ -16,8 +19,6 @@ pub mod permissions;
 pub mod plans;
 pub mod plugins;
 pub mod statusline;
-pub mod context;
-pub mod ai;
 
 use axum::{
     routing::get,
@@ -90,9 +91,10 @@ pub fn router(
         .nest("/plans", plans::router())
         .nest("/plugins", plugins::router())
         .nest("/statusline", statusline::router())
-        .nest("/cc-bridge", crate::cc_bridge::router())
-        .nest("/context", context::router())
         .nest("/ai", ai::router())
+        .nest("/cc-bridge", crate::cc_bridge::router())
+        .nest("/chat", chat::router())
+        .nest("/context", context::router())
         .with_state(state)
 }
 
