@@ -233,5 +233,5 @@ export function useTerminal(
     }
   }, [])
 
-  return { connected, exitCode, readOnly, setReadOnly, attach, detach }
+  return { connected, exitCode, readOnly, setReadOnly, attach, detach, termRef, wsRef }
 }
