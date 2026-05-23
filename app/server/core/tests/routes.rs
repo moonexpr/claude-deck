@@ -120,11 +120,14 @@ async fn all_route_families_mounted_and_respond() {
     // ---- ai: POST /api/v1/ai/chat → 503 when no anthropic_api_key -----------
     // The stub (501) was replaced in Phase C C1 with the real proxy handler.
     // With no key configured the handler returns 503 Service Unavailable.
+    // Origin must be present; absent-Origin now returns 403 (parity with WS).
     {
         let req = axum::http::Request::builder()
             .method("POST")
             .uri("/api/v1/ai/chat")
             .header("content-type", "application/json")
+            .header("origin", "http://127.0.0.1:8000")
+            .header("host", "127.0.0.1:8000")
             .body(Body::from(r#"{"messages":[]}"#))
             .unwrap();
         let resp = router

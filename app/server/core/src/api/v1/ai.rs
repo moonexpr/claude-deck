@@ -69,13 +69,11 @@ struct SuggestUsage {
 /// Parse an upstream error string produced by the anthropic service layer.
 /// Format: "upstream_error|<status_code>|<detail>"
 fn parse_upstream_error(err: &str) -> (u16, String) {
-    if let Some(rest) = err.strip_prefix("upstream_error|") {
-        if let Some((code_str, detail)) = rest.split_once('|') {
-            if let Ok(code) = code_str.parse::<u16>() {
+    if let Some(rest) = err.strip_prefix("upstream_error|")
+        && let Some((code_str, detail)) = rest.split_once('|')
+            && let Ok(code) = code_str.parse::<u16>() {
                 return (code, detail.to_string());
             }
-        }
-    }
     (502, err.to_string())
 }
 
@@ -113,15 +111,19 @@ fn no_key_response() -> Response<Body> {
     (StatusCode::SERVICE_UNAVAILABLE, Json(body)).into_response()
 }
 
+/// Origin required for all state-changing requests; aligns with cc-bridge WS policy.
+///
+/// Absent or empty Origin → 403. This mirrors the WebSocket endpoint which has
+/// always rejected absent-Origin connections (close code 4403). The previous
+/// "absent allowed for non-browser callers" rationale no longer applies: every
+/// legitimate Deck client (browser, Tauri) sends Origin. Server-to-server callers
+/// must pass an explicit same-origin header to be accepted.
 fn same_origin_ok(headers: &HeaderMap) -> bool {
     let origin = headers
         .get("origin")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    // An absent Origin is treated as same-origin for non-browser callers
-    // (e.g. server-to-server, tests). Only reject when an Origin is present
-    // but does not match the Host.
-    origin.is_empty() || is_same_origin(origin, headers)
+    !origin.is_empty() && is_same_origin(origin, headers)
 }
 
 // ---------------------------------------------------------------------------

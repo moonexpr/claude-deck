@@ -56,11 +56,20 @@ fn make_config(tmp: &std::path::Path) -> server_core::ServerConfig {
     }
 }
 
+// Default host/origin used by all same-origin helpers below.
+// Absent-Origin requests now return 403 (parity with cc-bridge WS).
+const TEST_HOST: &str = "127.0.0.1:8000";
+const TEST_ORIGIN: &str = "http://127.0.0.1:8000";
+
 /// Issue a GET request and return (status, body-bytes).
+///
+/// Includes a matching Origin + Host so same-origin check passes.
 async fn do_get(router: &axum::Router, uri: &str) -> (u16, bytes::Bytes) {
     let req = axum::http::Request::builder()
         .method("GET")
         .uri(uri)
+        .header("origin", TEST_ORIGIN)
+        .header("host", TEST_HOST)
         .body(Body::empty())
         .unwrap();
     let resp = router.clone().oneshot(req).await.unwrap();
@@ -70,11 +79,15 @@ async fn do_get(router: &axum::Router, uri: &str) -> (u16, bytes::Bytes) {
 }
 
 /// Issue a POST with a JSON body, return (status, body-bytes).
+///
+/// Includes a matching Origin + Host so same-origin check passes.
 async fn do_post(router: &axum::Router, uri: &str, body: &str) -> (u16, bytes::Bytes) {
     let req = axum::http::Request::builder()
         .method("POST")
         .uri(uri)
         .header("content-type", "application/json")
+        .header("origin", TEST_ORIGIN)
+        .header("host", TEST_HOST)
         .body(Body::from(body.to_string()))
         .unwrap();
     let resp = router.clone().oneshot(req).await.unwrap();
@@ -104,11 +117,15 @@ async fn do_post_with_origin(
 }
 
 /// Issue a PUT with a JSON body, return (status, body-bytes).
+///
+/// Includes a matching Origin + Host so same-origin check passes.
 async fn do_put(router: &axum::Router, uri: &str, body: &str) -> (u16, bytes::Bytes) {
     let req = axum::http::Request::builder()
         .method("PUT")
         .uri(uri)
         .header("content-type", "application/json")
+        .header("origin", TEST_ORIGIN)
+        .header("host", TEST_HOST)
         .body(Body::from(body.to_string()))
         .unwrap();
     let resp = router.clone().oneshot(req).await.unwrap();
@@ -118,10 +135,14 @@ async fn do_put(router: &axum::Router, uri: &str, body: &str) -> (u16, bytes::By
 }
 
 /// Issue a DELETE, return status code.
+///
+/// Includes a matching Origin + Host so same-origin check passes.
 async fn do_delete(router: &axum::Router, uri: &str) -> u16 {
     let req = axum::http::Request::builder()
         .method("DELETE")
         .uri(uri)
+        .header("origin", TEST_ORIGIN)
+        .header("host", TEST_HOST)
         .body(Body::empty())
         .unwrap();
     let resp = router.clone().oneshot(req).await.unwrap();
