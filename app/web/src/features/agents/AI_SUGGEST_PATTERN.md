@@ -28,9 +28,9 @@ does not disturb the surrounding layout when closed.
 
 ## System-Prompt Shape Per File Kind
 
-The system prompt is embedded in the first user message because the server's
-`Message` type does not have a separate `system` role — it maps directly to the
-Anthropic `messages` array. Template:
+The system prompt is sent as a first-class `system`-role message. The server's
+`Message` enum supports `system | user | assistant`, matching the Anthropic
+messages API. Template:
 
 ```
 You are generating or improving a Claude Code <FILE_KIND> file.
