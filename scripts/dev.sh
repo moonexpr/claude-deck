@@ -1,6 +1,10 @@
 #!/bin/bash
-# Development server startup script
-# Starts both backend and frontend in development mode
+# Development server startup script — starts server-bin (axum) and the Vite
+# dev server for the app/ tree.
+#
+# Usage:
+#   ./scripts/dev.sh                 # bind to 127.0.0.1
+#   ./scripts/dev.sh --host 0.0.0.0  # bind to all interfaces (LAN/tailnet)
 
 set -e
 
@@ -14,7 +18,7 @@ usage() {
 Usage: $0 [--host <host>]
 
 Options:
-  --host <host>   Bind both backend and frontend to the given host (e.g. 0.0.0.0)
+  --host <host>   Bind both server and web dev to the given host (e.g. 0.0.0.0)
   -h, --help      Show this help message
 EOF
 }
@@ -48,28 +52,24 @@ done
 
 echo "Starting Claude Deck development servers..."
 
-# Check if backend Cargo.toml exists
-if [ ! -f "$PROJECT_ROOT/backend/Cargo.toml" ]; then
-    echo "Error: Backend Cargo.toml not found."
+if [ ! -f "$PROJECT_ROOT/app/server/Cargo.toml" ]; then
+    echo "Error: app/server/Cargo.toml not found."
     exit 1
 fi
-
-# Check if frontend node_modules exists
-if [ ! -d "$PROJECT_ROOT/frontend/node_modules" ]; then
-    echo "Error: Frontend dependencies not installed."
+if [ ! -d "$PROJECT_ROOT/app/web/node_modules" ]; then
+    echo "Error: Web dependencies not installed."
     echo "Run ./scripts/install.sh first."
     exit 1
 fi
 
-BACKEND_PID=""
-FRONTEND_PID=""
+SERVER_PID=""
+WEB_PID=""
 CLEANED_UP=0
 
-# Kill a process and its entire descendant tree
+# Kill a process and its entire descendant tree.
 kill_tree() {
     local pid="$1"
     [ -z "$pid" ] && return 0
-    # Collect descendants (children, grandchildren, ...)
     local pids="$pid"
     local frontier="$pid"
     while [ -n "$frontier" ]; do
@@ -80,7 +80,6 @@ kill_tree() {
         frontier="$next"
     done
     kill -TERM $pids 2>/dev/null || true
-    # Give them a moment, then force-kill anything left
     sleep 1
     kill -KILL $pids 2>/dev/null || true
 }
@@ -90,8 +89,8 @@ cleanup() {
     CLEANED_UP=1
     echo ""
     echo "Shutting down servers..."
-    kill_tree "$BACKEND_PID"
-    kill_tree "$FRONTEND_PID"
+    kill_tree "$SERVER_PID"
+    kill_tree "$WEB_PID"
     wait 2>/dev/null || true
 }
 
@@ -99,31 +98,31 @@ trap 'cleanup; exit 130' SIGINT
 trap 'cleanup; exit 143' SIGTERM
 trap cleanup EXIT
 
-BACKEND_HOST_ARGS=()
-FRONTEND_HOST_ARGS=()
+SERVER_HOST_ENV=()
+WEB_HOST_ARGS=()
 if [ -n "$HOST" ]; then
-    BACKEND_HOST_ARGS=(--host "$HOST")
-    FRONTEND_HOST_ARGS=(-- --host "$HOST")
+    SERVER_HOST_ENV=(HOST="$HOST")
+    WEB_HOST_ARGS=(-- --host "$HOST")
     echo "Binding servers to host: $HOST"
 fi
 
-# Start backend
-BACKEND_DISPLAY_HOST="${HOST:-localhost}"
-echo "Starting backend server on http://${BACKEND_DISPLAY_HOST}:8000..."
-cd "$PROJECT_ROOT/backend"
-cargo run &
-BACKEND_PID=$!
+# Start server-bin
+DISPLAY_HOST="${HOST:-localhost}"
+echo "Starting server-bin on http://${DISPLAY_HOST}:8000..."
+cd "$PROJECT_ROOT/app/server"
+env "${SERVER_HOST_ENV[@]}" PORT=8000 cargo run -p server-bin &
+SERVER_PID=$!
 
-# Start frontend
-echo "Starting frontend server on http://${BACKEND_DISPLAY_HOST}:5173..."
-cd "$PROJECT_ROOT/frontend"
-npm run dev "${FRONTEND_HOST_ARGS[@]}" &
-FRONTEND_PID=$!
+# Start Vite
+echo "Starting web dev server on http://${DISPLAY_HOST}:5173..."
+cd "$PROJECT_ROOT/app/web"
+npm run dev "${WEB_HOST_ARGS[@]}" &
+WEB_PID=$!
 
 echo ""
 echo "Development servers started!"
-echo "  - Backend:  http://${BACKEND_DISPLAY_HOST}:8000 (REST API under /api/v1, health at /health)"
-echo "  - Frontend: http://${BACKEND_DISPLAY_HOST}:5173"
+echo "  - Server: http://${DISPLAY_HOST}:8000 (REST API under /api/v1, health at /health)"
+echo "  - Web:    http://${DISPLAY_HOST}:5173"
 echo ""
 echo "Press Ctrl+C to stop all servers."
 

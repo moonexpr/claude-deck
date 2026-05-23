@@ -2,7 +2,7 @@
 
 **Website**: [claudedeck.org](https://claudedeck.org)
 
-A self-hosted web application for visualizing and managing Claude Code configuration. Provides a unified interface for managing MCP servers, plugins, slash commands, hooks, agents, permissions, usage tracking, session transcripts, CC Bridge, and other Claude Code extensions.
+A self-hosted application for visualizing and managing Claude Code configuration. Provides a unified interface for managing MCP servers, plugins, slash commands, hooks, agents, permissions, usage tracking, session transcripts, CC Bridge, AI chat, and other Claude Code extensions. Ships as a Tauri desktop app **and** a standalone Rust binary for LAN/mobile access.
 
 ## Why This Exists
 
@@ -29,26 +29,25 @@ If you only use Claude Code casually with mostly default config, Claude Deck may
 ## Features
 
 - **Dashboard** — Overview of all Claude Code configurations with context window visualizer
-- **Config Editor** — Browse, inspect, and edit configuration files across all scopes
+- **Config Editor** — Browse, inspect, and edit configuration files across all scopes (CodeMirror 6 syntax highlighting on read-only JSON renders)
 - **MCP Servers** — Add, edit, test, and manage MCP server connections with OAuth support. Browse and install servers from the [MCP Registry](https://registry.modelcontextprotocol.io). View tools, resources, and prompts. Supports stdio, HTTP, and SSE transports
-- **Slash Commands** — Browse, create, and edit custom commands (user and project scope)
+- **Slash Commands** — Browse, create, and edit custom commands (user and project scope) with CodeMirror 6 markdown editing
 - **Plugins** — Browse installed plugins with detail views and enable/disable toggles
 - **Hooks** — Configure automation hooks by event type (PreToolUse, PostToolUse, etc.)
 - **Permissions** — Visual allow/deny rule builder for tool access control
-- **Agents** — Create and manage custom agent configurations
+- **Agents** — Create and manage custom agent configurations; ✨ AI suggest writes a draft into the CodeMirror buffer (reusable pattern for Commands / Skills / Memory / Output Styles / Hooks)
 - **Skills** — Browse installed skills and discover new ones from [skills.sh](https://skills.sh)
 - **Memory** — View and edit Claude Code memory files
 - **Output Styles** — Configure response output formats
 - **Status Line** — Customize Claude Code status line display
-- **CC Bridge** — Discover and monitor Claude Code sessions. Legacy build attaches to tmux panes; new build (`app/`) hosts the child PTY directly via `portable-pty` over WebSocket binary frames. Spawn new sessions and manage worktrees directly from the UI.
-- **Chat panel** *(`app/` build only)* — Streaming chat against Anthropic via a server-side proxy. Key stays on the server; conversations persist to SQLite via `sqlx::migrate!`.
-- **AI-assisted editing** *(`app/` build only)* — `<execute>`-tag preview with explicit Send/Edit/Discard on the CC Bridge terminal; AI-suggest button on the Agents editor (template extends to Commands / Skills / Memory / Output Styles / Hooks).
+- **CC Bridge** — Discover, spawn, and monitor Claude Code sessions. Hosts the child PTY directly via `portable-pty` over WebSocket binary frames. Optional AI panel suggests shell commands and renders them as `[Send] / [Edit] / [Discard]` preview cards — **the model never reaches the PTY without an explicit Send click**.
+- **Chat panel** — Streaming chat against Anthropic via a server-side proxy. The API key stays on the server; conversations persist to SQLite via `sqlx::migrate!`.
 - **Session Transcripts** — View conversation history with full message details and tool use
 - **Usage Tracking** — Monitor token usage, costs, and billing blocks with daily/monthly charts
 - **Plan History** — Browse and review Claude Code implementation plans
 - **Backup & Restore** — Create and manage configuration backups with selective restore
 - **Projects** — Discover and manage project directories
-- **Mobile-friendly** — Responsive layout with unified page headers; usable from a phone or tablet, not just a desktop browser
+- **Mobile-friendly** — Responsive layout, scrollable sidebar drawer; usable from a phone or tablet over LAN/tailnet, not just the desktop app
 
 ## Screenshots
 
@@ -65,56 +64,44 @@ If you only use Claude Code casually with mostly default config, Claude Deck may
 | CC Bridge | Skills |
 |-----------|--------|
 | ![CC Bridge](screenshots/cc-bridge.png) | ![Skills](screenshots/skills.png) |
-| Monitor and interact with Claude Code tmux sessions | Browse installed skills and discover new ones |
+| Spawn and interact with Claude Code sessions (PTY-hosted) | Browse installed skills and discover new ones |
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Rust with axum (Tokio async) |
-| Frontend | React 19 + TypeScript + Vite 7 (responsive / mobile-friendly) |
-| UI Components | shadcn/ui + Tailwind CSS |
-| Charts | Recharts (via shadcn/ui) |
+| Desktop shell | Tauri 2 (Rust) |
+| Server | Rust 2024 · axum 0.8 · sqlx (with `sqlx::migrate!`) · portable-pty |
+| Web UI | React 19 · TypeScript · Vite 7 · Tailwind 4 (`@theme`) · shadcn/ui · Zustand · CodeMirror 6 · xterm.js · Vercel AI SDK v6 |
 | Database | SQLite (async via sqlx) |
-| Containerization | Docker + Docker Compose |
+| AI | Anthropic Messages API via server-side proxy (Vercel Data Stream v1 to the browser); key resolved from OS keychain (desktop) or `ANTHROPIC_API_KEY` env (server-bin) |
 
-> [!NOTE]
-> The backend was rewritten from Python/FastAPI to Rust/axum. It ships as a
-> single static binary that also serves the built frontend, so a production
-> deployment is one process with no Python runtime. The REST API surface
-> (`/api/v1/...`) and on-disk config behavior are unchanged.
+## Layout
 
-> [!NOTE]
-> The next-generation build lives in **`app/`** (Tauri 2 desktop + Rust sidecar
-> + Vite/React 19/Tailwind 4 + CodeMirror 6 + Vercel AI SDK v6). It adds an AI
-> chat panel, AI-assisted config editing, and direct PTY hosting for CC Bridge.
-> The current `backend/` + `frontend/` trees keep shipping from `main` until
-> the cleanup PR. See [`app/README.md`](app/README.md) for the new dev workflow.
-
-## Quick Start with Docker
-
-```bash
-git clone https://github.com/adrirubio/claude-deck.git
-cd claude-deck
-docker compose up
+```
+app/
+├── server/     # Cargo workspace — core lib + bin (HTTP/WS backend)
+├── desktop/   # Tauri 2 — embeds server/core in-process; OS keychain for AI key
+└── web/        # React/Vite — UI bundle, served by both Tauri and server-bin
 ```
 
-This builds and starts Claude Deck at http://localhost:8000, mounting your `~/.claude` directory and `~/.claude.json` configuration file.
-
-> [!WARNING]
-> Claude Deck is not a mock viewer. It works with your real local Claude Code files, so changes made in the UI can change your working setup.
-
-> [!NOTE]
-> The container mounts your home directory's Claude Code configuration. The container runs as root to access these files; adjust permissions if running as a non-root user.
+See [`app/README.md`](app/README.md) for layout detail, dev workflow, and migration notes.
 
 ## Manual Installation
 
-**Prerequisites**: Rust 1.85+ (edition 2024, via [rustup](https://rustup.rs/)), Node.js 18+
+**Prerequisites**: Rust 1.85+ (edition 2024, via [rustup](https://rustup.rs/)), Node.js 18+.
 
 ```bash
-git clone https://github.com/adrirubio/claude-deck.git
+git clone https://github.com/moonexpr/claude-deck.git
 cd claude-deck
 ./scripts/install.sh
+```
+
+Optional desktop app:
+
+```bash
+cargo install tauri-cli --version '^2.0'
+cd app/desktop && cargo tauri dev
 ```
 
 ## Development
@@ -124,37 +111,44 @@ cd claude-deck
 ```
 
 This starts:
-- Backend at http://localhost:8000 (REST API under `/api/v1/`, health check at `/health`)
-- Frontend at http://localhost:5173
+- Server (axum) at http://localhost:8000 (REST API under `/api/v1/`, health check at `/health`)
+- Web dev server (Vite) at http://localhost:5173
 
-The first `./scripts/dev.sh` run compiles the Rust backend (`cargo run`), which
-can take a few minutes; subsequent runs are incremental.
+The first `./scripts/dev.sh` run compiles the Rust server (`cargo run`), which can take a few minutes; subsequent runs are incremental.
 
 ### Hostname & remote access
 
-To reach the dev environment from another machine on your LAN or tailnet (e.g.
-to monitor tmux sessions via CC Bridge from a different host), pass `--host` —
-both servers then bind to all interfaces:
+To reach the dev environment from another machine on your LAN or tailnet, pass `--host`:
 
 ```bash
 ./scripts/dev.sh --host 0.0.0.0
 ```
 
-The backend also honors environment variables (useful for the production
-binary / launchd / systemd / Docker):
+The server also honors environment variables (useful for the production binary / launchd / systemd):
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `HOST` | `0.0.0.0` | Address the backend binds to |
-| `PORT` | `8000` | Port the backend listens on |
+| `HOST` | `0.0.0.0` | Address the server binds to |
+| `PORT` | `8000` | Port the server listens on |
 | `PRESENCE_PUBLIC_URL` | *(auto)* | Base URL embedded in the CC Bridge / Presence setup snippet |
+| `ANTHROPIC_API_KEY` | *(unset)* | Enables the AI proxy (server-bin path; Tauri uses the OS keychain instead) |
+| `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | Override for staging/test or self-hosted Anthropic-compatible endpoints |
+| `FRONTEND_DIST` | *(unset)* | Path to the built web bundle; required when serving the UI from server-bin in production |
 
-`PRESENCE_PUBLIC_URL` only needs to be set if autodetection is wrong. When it
-is unset, the public URL is **auto-derived from the incoming request** — the
-`Host` header plus `X-Forwarded-Proto` — so the snippet shows the correct
-address whether you reach the UI over `localhost`, a LAN IP, a tailnet name,
-or a reverse proxy, with no configuration. Set it explicitly (e.g.
-`https://deck.example.com`) only to override that.
+`PRESENCE_PUBLIC_URL` only needs to be set if autodetection is wrong. When it is unset, the public URL is **auto-derived from the incoming request** — the `Host` header plus `X-Forwarded-Proto`.
+
+## Production Build
+
+```bash
+./scripts/build.sh
+```
+
+Produces `app/web/dist/` and `app/server/target/release/server-bin`. Run with:
+
+```bash
+FRONTEND_DIST=$PWD/app/web/dist HOST=0.0.0.0 PORT=8000 \
+  app/server/target/release/server-bin
+```
 
 ## Configuration Files
 
@@ -178,9 +172,7 @@ Claude Deck reads and writes these Claude Code configuration files:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, style, and PR guidelines.
 
-The backend is a Rust/axum service; its REST API is served under `/api/v1/`
-(there is no auto-generated Swagger UI — the route modules in
-`backend/src/api/v1/` are the API reference).
+The server is a Rust/axum service; its REST API is served under `/api/v1/`. There is no auto-generated Swagger UI — the route modules in `app/server/core/src/api/v1/` are the API reference.
 
 ## Feedback
 

@@ -1,6 +1,9 @@
 #!/bin/bash
-# Production build script
-# Builds the frontend for production deployment
+# Production build script.
+#   1. Builds app/web for production (output: app/web/dist).
+#   2. Builds server-bin in release mode (output: app/server/target/release/server-bin).
+#
+# The server-bin reads FRONTEND_DIST env to locate the bundle.
 
 set -e
 
@@ -9,24 +12,23 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 echo "Building Claude Deck for production..."
 
-# Build frontend (the backend binary serves frontend/dist directly)
 echo ""
-echo "Building frontend..."
-cd "$PROJECT_ROOT/frontend"
+echo "Building web bundle..."
+cd "$PROJECT_ROOT/app/web"
 npm run build
 
-# Build the Rust backend (release)
 echo ""
-echo "Building backend (release)..."
-cd "$PROJECT_ROOT/backend"
-cargo build --release
+echo "Building server-bin (release)..."
+cd "$PROJECT_ROOT/app/server"
+cargo build --release -p server-bin
 
 echo ""
-echo "Build complete!"
-echo "  Frontend assets: frontend/dist"
-echo "  Backend binary:  backend/target/release/backend"
+echo "Build complete:"
+echo "  Web bundle:   $PROJECT_ROOT/app/web/dist"
+echo "  Server:       $PROJECT_ROOT/app/server/target/release/server-bin"
 echo ""
-echo "To deploy, run the single backend binary (it also serves frontend/dist):"
-echo "  cd backend && PORT=8000 ./target/release/backend"
+echo "Production run:"
+echo "  FRONTEND_DIST=$PROJECT_ROOT/app/web/dist HOST=0.0.0.0 PORT=8000 \\"
+echo "    $PROJECT_ROOT/app/server/target/release/server-bin"
 echo ""
-echo "Override HOST / PORT / PRESENCE_PUBLIC_URL via environment variables."
+echo "Override HOST / PORT / PRESENCE_PUBLIC_URL / ANTHROPIC_API_KEY via environment variables."
