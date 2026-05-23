@@ -9,6 +9,7 @@ import { apiClient, buildEndpoint } from '@/lib/api'
 import { useProjectStore } from '@/stores/useProjectStore'
 import { toast } from 'sonner'
 import type { ConfigValue, ResolvedConfigResponse, ResolvedSettingValue } from '@/types/config'
+import { CodeEditor } from '@/components/shared/CodeEditor'
 
 const SCOPE_ICONS = {
   managed: Shield,
@@ -198,9 +199,13 @@ function ScopeTabContent({ scope, data }: ScopeTabContentProps) {
           </Badge>
         )}
       </div>
-      <pre className="bg-muted p-4 rounded-lg overflow-auto max-h-96 text-sm">
-        {JSON.stringify(scopeInfo.settings, null, 2)}
-      </pre>
+      <div className="min-h-[300px] max-h-[600px] overflow-auto">
+        <CodeEditor
+          language="json"
+          readOnly
+          value={JSON.stringify(scopeInfo.settings, null, 2)}
+        />
+      </div>
     </div>
   )
 }

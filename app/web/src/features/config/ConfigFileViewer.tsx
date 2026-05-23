@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import type { RawFileContent } from '@/types/config'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { JsonViewer } from '@/components/shared/JsonViewer'
+import { CodeEditor } from '@/components/shared/CodeEditor'
 
 interface ConfigFileViewerProps {
   filePath: string | null
@@ -97,7 +97,17 @@ export function ConfigFileViewer({ filePath }: ConfigFileViewerProps) {
         <CardDescription className="text-xs">{filePath}</CardDescription>
       </CardHeader>
       <CardContent className="flex-1 overflow-auto">
-        <JsonViewer data={content.content} />
+        <div className="min-h-[300px] max-h-[600px] overflow-auto">
+          <CodeEditor
+            language="json"
+            readOnly
+            value={
+              typeof content.content === 'string'
+                ? content.content
+                : JSON.stringify(content.content, null, 2)
+            }
+          />
+        </div>
       </CardContent>
     </Card>
   )
