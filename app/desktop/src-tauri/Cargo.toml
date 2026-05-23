@@ -26,6 +26,7 @@ axum = { version = "0.8", features = [] }
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
 dirs = "6"
+keyring = "3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

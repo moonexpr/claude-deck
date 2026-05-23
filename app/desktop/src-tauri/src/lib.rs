@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use tauri::{Manager, State};
 
+mod keychain;
+
 /// Managed state: the base URL of the in-process embedded server.
 pub struct ServerBaseUrl(pub Arc<String>);
 
@@ -61,12 +63,15 @@ pub fn run() {
 
             let cwd_fallback = app_data_dir.clone();
 
+            let anthropic_api_key = keychain::read_anthropic_key();
+
             let config = server_core::ServerConfig {
                 db_url,
                 projects_dir,
                 frontend_dist_path: None, // Tauri serves the UI; server is API-only
                 presence_public_url: None,
-                anthropic_api_key: None,
+                anthropic_api_key,
+                anthropic_base_url: "https://api.anthropic.com".to_string(),
                 enable_external_tools: true,
                 cwd_fallback,
             };
