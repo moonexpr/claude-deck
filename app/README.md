@@ -30,18 +30,102 @@ cd app/server && HOST=0.0.0.0 cargo run -p server-bin
 # Reach the UI at http://<host>:8000 (server-bin also serves the built web bundle when FRONTEND_DIST is set)
 ```
 
-## Anthropic key resolution
+## Credential sources
 
-The AI proxy (`/api/v1/ai/chat`, `/api/v1/ai/suggest`) only fires when `ServerConfig.anthropic_api_key` is `Some`. Resolution order:
+The AI proxy (`/api/v1/ai/chat`, `/api/v1/ai/suggest`) resolves a
+credential per request via `ServerConfig.key_source: KeySource`. Two
+paths are supported:
 
-1. **Tauri builds** — `app/desktop/src-tauri/src/keychain.rs` reads the OS keychain entry `(service: "claude-deck", account: "anthropic_api_key")`. On macOS:
+### Path A — Anthropic API key (`sk-ant-…`)
+
+Pay-per-token billing on the Anthropic Console. Sent to upstream as
+`x-api-key`. This is the original path.
+
+1. **Tauri builds** — `app/desktop/src-tauri/src/keychain.rs` reads
+   the OS keychain entry `(service: "claude-deck", account:
+   "anthropic_api_key")`. On macOS:
    ```bash
    security add-generic-password -s claude-deck -a anthropic_api_key -w 'sk-ant-…'
    ```
 2. **Standalone `server-bin`** — reads `ANTHROPIC_API_KEY` env.
-3. **Neither** — `/api/v1/ai/chat` returns 503 with `{ anthropic_key_configured: false }`. The web UI surfaces a non-blocking banner pointing the user at the keychain / env paths.
 
-The key never leaves the server: only the `x-api-key` header to Anthropic. Browser DevTools Network shows no key on any client request.
+### Path B — Claude Code OAuth (experimental, closes #4)
+
+Reuses the user's existing Claude Code login (Pro / Max subscription)
+instead of provisioning a separate API key. The
+[`claudecode_ext`](https://github.com/moonexpr/claudecode_ext) framework
+runs a local TLS-MITM proxy that Claude Code's outbound HTTPS traffic
+flows through; the observed OAuth bearer is reused by the Deck's AI
+proxy and sent to Anthropic as `Authorization: Bearer …`.
+
+1. **Tauri builds** — auto-detected. If no `(claude-deck,
+   anthropic_api_key)` entry exists in the keychain **and**
+   `Claude Code-credentials` does (probed via `security
+   find-generic-password` without reading the value, so no Touch ID
+   prompt), the Tauri build spawns the framework automatically.
+2. **Standalone `server-bin`** — opt-in via env var:
+   ```bash
+   CLAUDECODE_EXT_KEY_SOURCE=oauth cargo run -p server-bin
+   ```
+   Optional overrides: `CLAUDECODE_EXT_BIND`, `CLAUDECODE_EXT_CA_DIR`,
+   `CLAUDECODE_EXT_DISCOVERY`.
+
+**Launching Claude Code through the proxy.** The framework only
+observes traffic that flows through it. After the Deck is running with
+the OAuth source, launch `claude` via the included `claude_ext` shim
+binary instead of the bare `claude` binary:
+
+```bash
+# Build the shim once:
+cd ~/Garden/app/claudecode_ext && cargo build --release -p claudecode_ext_shim
+# Then use it in place of `claude`:
+./target/release/claude_ext --print "hello"
+# OR symlink into PATH:
+ln -s "$PWD/target/release/claude_ext" ~/.local/bin/
+```
+
+The shim reads `~/.claudecode_ext/proxy.sock` (the discovery file the
+framework writes at startup), exports `HTTPS_PROXY` +
+`NODE_EXTRA_CA_CERTS`, and `execvp`s `claude`. Bun honors both env
+vars, so the user-facing Claude Code experience is unchanged — only
+the network path changes.
+
+> **Experimental.** Claude Code's auth flow is an internal Anthropic
+> implementation detail and can change without notice. Path B may
+> break with any Claude Code update. Reusing the OAuth credential in
+> a third-party process may also be against Anthropic's terms — the
+> "right" long-term fix is for Anthropic to expose a public OAuth
+> client registration. Use Path A in production.
+
+### No source configured
+
+If neither path resolves, `/api/v1/ai/chat` returns 503 with:
+
+```json
+{
+  "status": "unavailable",
+  "anthropic_key_configured": false,
+  "key_source": null
+}
+```
+
+When a path *is* configured but currently unable to produce a
+credential (e.g. OAuth selected but Claude Code hasn't run through
+`claude_ext` recently enough), `key_source` reports the label
+(`"api_key"` or `"oauth"`) so the UI can suggest the right next step.
+
+### Privacy posture
+
+For Path A: the key never leaves the server; only the `x-api-key`
+header to Anthropic. Browser DevTools Network shows no key on any
+client request.
+
+For Path B: the framework is **observe-only** — bytes flow through
+unchanged, no traffic modification. The bearer captured from Claude
+Code is held in memory by the framework and never logged. The CA root
+is stored under `~/.claudecode_ext/ca/` (key file 0600) and trusted
+process-scoped via `NODE_EXTRA_CA_CERTS`; no system-trust-store
+modification.
 
 ## Migrations
 

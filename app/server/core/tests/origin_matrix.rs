@@ -23,7 +23,6 @@
 ///   ports work without configuration. The loophole is accepted behavior; a
 ///   future decision to close it would be its own cycle.
 use axum::body::Body;
-use http_body_util::BodyExt;
 use tower::ServiceExt;
 
 // ---------------------------------------------------------------------------

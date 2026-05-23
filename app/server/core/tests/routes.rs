@@ -62,6 +62,7 @@ async fn get(router: &axum::Router, uri: &str) -> u16 {
         .as_u16()
 }
 
+#[allow(dead_code)]
 async fn post_empty(router: &axum::Router, uri: &str) -> u16 {
     let req = axum::http::Request::builder()
         .method("POST")
