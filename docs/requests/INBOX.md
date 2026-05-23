@@ -161,3 +161,75 @@ chrome bands). Naturally belongs to the broader post-lift design pass
 workstream above — file together when picking either up.
 
 **Status:** open
+
+---
+
+## 2026-05-23 — Chat list selected-state: `muted-foreground` clashes with `bg-primary`; plus timestamp unit mismatch
+
+**Context:** Spotted from a screenshot of the Chat panel's `ChatList`
+(`app/web/src/features/chat/ChatList.tsx`) during the demo. When a conversation
+row is the active/selected one, the card flips to a saturated green background
+(`bg-primary`) but the subtitle line (`"1 message · 20576d ago"`) keeps
+`text-[hsl(var(--muted-foreground))]` — dim gray. Dim gray on saturated green
+fails WCAG and reads as illegible mush.
+
+**Root cause — shadcn token pairing.** Each background token has a paired
+foreground token:
+
+| background | foreground |
+|---|---|
+| `bg-background` | `text-foreground` |
+| `bg-card` | `text-card-foreground` |
+| `bg-muted` | `text-muted-foreground` |
+| `bg-primary` | `text-primary-foreground` |
+| `bg-accent` | `text-accent-foreground` |
+
+`text-muted-foreground` is "dim gray suitable for secondary text *on the page's
+default background*." The CSS variable resolves to a single gray value
+globally — it has no notion of which card it's currently on. When the card
+flips to `bg-primary`, the subtitle keeps the global muted gray and clashes.
+The `@layer utilities { .text-\[hsl\(var\(--muted-foreground\)\)\] { ... } }`
+emission is just Tailwind's JIT output for the arbitrary-value class — not
+the cause; it's the symptom of using the wrong token in the active state.
+
+**Two fix paths (pick one):**
+
+1. **Wrong design token.** `bg-primary` is CTA-strength (buttons). shadcn's
+   convention for *item selection* is `bg-accent` — subtler, and its paired
+   `text-accent-foreground` is legible. If the green is meant to mark "this
+   conversation is open," switch the selected-state background from `bg-primary`
+   → `bg-accent` and both lines become readable without touching the subtitle
+   class.
+2. **Keep the green, fix the subtitle.** Override the subtitle when active:
+   - `text-muted-foreground data-[state=active]:text-primary-foreground/75`, or
+   - Use `text-current/70` on the subtitle and let the parent card's
+     `text-primary-foreground` (when active) cascade with 70% alpha.
+
+**Bonus bug in the same screenshot:** `"1 message · 20576d ago"` — that's
+~56 years. The server stores `Utc::now().timestamp()` (seconds since epoch,
+i64) in `chat_conversations.{created_at,updated_at}`. The client almost
+certainly feeds that number directly to `new Date(n)` which expects
+**milliseconds**. Fix is one of: (a) `new Date(n * 1000)` on the client; or
+(b) change the server inserts/updates to `.timestamp_millis()` (and update the
+column comments + any other consumers). Touching the server side also
+requires migrating existing rows or accepting that ChatList relative-time
+display will look weird for pre-existing rows until a fresh DB.
+
+**Where to look:**
+- Selected state: `app/web/src/features/chat/ChatList.tsx` (the active-row
+  className)
+- Subtitle class: same file
+- Timestamp render: same file, the `relativeTime(updated_at)` (or similar)
+  call site
+- Server timestamps: `app/server/core/src/api/v1/chat.rs` —
+  `Utc::now().timestamp()` calls in `create_conversation` and
+  `update_conversation`
+
+**Asked during:** stack-lift goal session, branch
+`lift/tauri-portable-pty-cm6-aisdk`, during the presence demo prep
+(2026-05-23, post-Phase-D).
+
+**Why deferred:** Same reason as the mobile-chrome theme entry above — demo
+focus, not blocking; bundles cleanly with the post-lift design pass.
+
+**Status:** open
