@@ -11,8 +11,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 VERSION_FILE="$PROJECT_ROOT/VERSION"
-PACKAGE_JSON="$PROJECT_ROOT/frontend/package.json"
-PYPROJECT_TOML="$PROJECT_ROOT/backend/pyproject.toml"
+
+# Legacy stack (still shipping from main until the cleanup PR)
+FRONTEND_PACKAGE_JSON="$PROJECT_ROOT/frontend/package.json"
+
+# Lift stack (app/ — Tauri 2 + Rust sidecar + Vite/React)
+APP_WEB_PACKAGE_JSON="$PROJECT_ROOT/app/web/package.json"
+APP_SERVER_CORE_CARGO="$PROJECT_ROOT/app/server/core/Cargo.toml"
+APP_SERVER_BIN_CARGO="$PROJECT_ROOT/app/server/bin/Cargo.toml"
+APP_DESKTOP_CARGO="$PROJECT_ROOT/app/desktop/src-tauri/Cargo.toml"
+APP_TAURI_CONF="$PROJECT_ROOT/app/desktop/src-tauri/tauri.conf.json"
 
 # Colors for output
 RED='\033[0;31m'
@@ -58,37 +66,83 @@ else
     log_info "Reading version from VERSION file: $VERSION"
 fi
 
-# Update frontend/package.json
-if [ -f "$PACKAGE_JSON" ]; then
-    # Use a temporary file for sed compatibility across platforms
-    if command -v jq &> /dev/null; then
-        jq --arg v "$VERSION" '.version = $v' "$PACKAGE_JSON" > "$PACKAGE_JSON.tmp" && mv "$PACKAGE_JSON.tmp" "$PACKAGE_JSON"
-    else
-        # Fallback to sed if jq is not available
-        sed -i.bak "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$PACKAGE_JSON" && rm -f "$PACKAGE_JSON.bak"
-    fi
-    log_info "Updated $PACKAGE_JSON to version $VERSION"
-else
-    log_warn "File not found: $PACKAGE_JSON"
-fi
+# ---------- JSON: package.json files (jq if available, else sed) ----------
 
-# Update backend/pyproject.toml
-if [ -f "$PYPROJECT_TOML" ]; then
-    sed -i.bak "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" "$PYPROJECT_TOML" && rm -f "$PYPROJECT_TOML.bak"
-    log_info "Updated $PYPROJECT_TOML to version $VERSION"
-else
-    log_warn "File not found: $PYPROJECT_TOML"
-fi
+update_package_json() {
+    local file="$1"
+    if [ ! -f "$file" ]; then
+        log_warn "File not found: $file"
+        return
+    fi
+    if command -v jq &> /dev/null; then
+        jq --arg v "$VERSION" '.version = $v' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+    else
+        sed -i.bak "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$file" && rm -f "$file.bak"
+    fi
+    log_info "Updated $file to version $VERSION"
+}
+
+update_package_json "$FRONTEND_PACKAGE_JSON"
+update_package_json "$APP_WEB_PACKAGE_JSON"
+
+# ---------- Cargo.toml: only the top-level [package] version, not [dependencies] ----------
+#
+# `^version = "..."` anchored to a line start; matches the package version, not
+# crate version strings under [dependencies].
+
+update_cargo_toml() {
+    local file="$1"
+    if [ ! -f "$file" ]; then
+        log_warn "File not found: $file"
+        return
+    fi
+    sed -i.bak -E "0,/^version = \"[^\"]*\"/{s/^version = \"[^\"]*\"/version = \"$VERSION\"/}" "$file" && rm -f "$file.bak"
+    log_info "Updated $file to version $VERSION"
+}
+
+update_cargo_toml "$APP_SERVER_CORE_CARGO"
+update_cargo_toml "$APP_SERVER_BIN_CARGO"
+update_cargo_toml "$APP_DESKTOP_CARGO"
+
+# ---------- tauri.conf.json: top-level "version" field ----------
+
+update_tauri_conf() {
+    local file="$1"
+    if [ ! -f "$file" ]; then
+        log_warn "File not found: $file"
+        return
+    fi
+    if command -v jq &> /dev/null; then
+        jq --arg v "$VERSION" '.version = $v' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+    else
+        sed -i.bak "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$file" && rm -f "$file.bak"
+    fi
+    log_info "Updated $file to version $VERSION"
+}
+
+update_tauri_conf "$APP_TAURI_CONF"
 
 log_info "Version sync complete: v$VERSION"
 
 # Display current versions for verification
 echo ""
 echo "Current versions:"
-echo "  VERSION file:    $(cat "$VERSION_FILE" | tr -d '[:space:]')"
-if [ -f "$PACKAGE_JSON" ]; then
-    echo "  package.json:    $(grep '"version"' "$PACKAGE_JSON" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')"
+echo "  VERSION file:                $(cat "$VERSION_FILE" | tr -d '[:space:]')"
+if [ -f "$FRONTEND_PACKAGE_JSON" ]; then
+    echo "  frontend/package.json:       $(grep '"version"' "$FRONTEND_PACKAGE_JSON" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')"
 fi
-if [ -f "$PYPROJECT_TOML" ]; then
-    echo "  pyproject.toml:  $(grep '^version' "$PYPROJECT_TOML" | sed 's/version = "\([^"]*\)"/\1/')"
+if [ -f "$APP_WEB_PACKAGE_JSON" ]; then
+    echo "  app/web/package.json:        $(grep '"version"' "$APP_WEB_PACKAGE_JSON" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')"
+fi
+if [ -f "$APP_SERVER_CORE_CARGO" ]; then
+    echo "  app/server/core/Cargo.toml:  $(grep '^version' "$APP_SERVER_CORE_CARGO" | head -1 | sed 's/version = "\([^"]*\)"/\1/')"
+fi
+if [ -f "$APP_SERVER_BIN_CARGO" ]; then
+    echo "  app/server/bin/Cargo.toml:   $(grep '^version' "$APP_SERVER_BIN_CARGO" | head -1 | sed 's/version = "\([^"]*\)"/\1/')"
+fi
+if [ -f "$APP_DESKTOP_CARGO" ]; then
+    echo "  app/desktop Cargo.toml:      $(grep '^version' "$APP_DESKTOP_CARGO" | head -1 | sed 's/version = "\([^"]*\)"/\1/')"
+fi
+if [ -f "$APP_TAURI_CONF" ]; then
+    echo "  tauri.conf.json:             $(grep '"version"' "$APP_TAURI_CONF" | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/')"
 fi

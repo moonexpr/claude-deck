@@ -40,7 +40,9 @@ If you only use Claude Code casually with mostly default config, Claude Deck may
 - **Memory** — View and edit Claude Code memory files
 - **Output Styles** — Configure response output formats
 - **Status Line** — Customize Claude Code status line display
-- **CC Bridge** — Discover and monitor Claude Code sessions running in tmux. Attach up to 4 terminals simultaneously in a 2x2 grid with independent read-only/interactive modes, fullscreen toggle, and per-pane controls. Spawn new sessions and manage worktrees directly from the UI
+- **CC Bridge** — Discover and monitor Claude Code sessions. Legacy build attaches to tmux panes; new build (`app/`) hosts the child PTY directly via `portable-pty` over WebSocket binary frames. Spawn new sessions and manage worktrees directly from the UI.
+- **Chat panel** *(`app/` build only)* — Streaming chat against Anthropic via a server-side proxy. Key stays on the server; conversations persist to SQLite via `sqlx::migrate!`.
+- **AI-assisted editing** *(`app/` build only)* — `<execute>`-tag preview with explicit Send/Edit/Discard on the CC Bridge terminal; AI-suggest button on the Agents editor (template extends to Commands / Skills / Memory / Output Styles / Hooks).
 - **Session Transcripts** — View conversation history with full message details and tool use
 - **Usage Tracking** — Monitor token usage, costs, and billing blocks with daily/monthly charts
 - **Plan History** — Browse and review Claude Code implementation plans
@@ -81,6 +83,13 @@ If you only use Claude Code casually with mostly default config, Claude Deck may
 > single static binary that also serves the built frontend, so a production
 > deployment is one process with no Python runtime. The REST API surface
 > (`/api/v1/...`) and on-disk config behavior are unchanged.
+
+> [!NOTE]
+> The next-generation build lives in **`app/`** (Tauri 2 desktop + Rust sidecar
+> + Vite/React 19/Tailwind 4 + CodeMirror 6 + Vercel AI SDK v6). It adds an AI
+> chat panel, AI-assisted config editing, and direct PTY hosting for CC Bridge.
+> The current `backend/` + `frontend/` trees keep shipping from `main` until
+> the cleanup PR. See [`app/README.md`](app/README.md) for the new dev workflow.
 
 ## Quick Start with Docker
 
