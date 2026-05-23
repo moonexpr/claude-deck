@@ -3,13 +3,15 @@ import { markdown } from "@codemirror/lang-markdown";
 import { json } from "@codemirror/lang-json";
 import { StreamLanguage } from "@codemirror/language";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
+import { EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import { useMemo } from "react";
 
 export type CodeEditorLanguage = "markdown" | "json" | "shell";
 
 export interface CodeEditorProps {
   value: string;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
   language: CodeEditorLanguage;
   readOnly?: boolean;
   placeholder?: string;
@@ -60,8 +62,16 @@ export function CodeEditor({
     document.documentElement.classList.contains("dark");
 
   const extensions = useMemo<Extension[]>(
-    () => [languageExtension(language)],
-    [language],
+    () => [
+      languageExtension(language),
+      // When readOnly, block all edits at the CM6 state level and also
+      // remove the "editable" DOM attribute so the browser renders no
+      // blinking insertion cursor. Selection and clipboard copy still work.
+      ...(readOnly
+        ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
+        : []),
+    ],
+    [language, readOnly],
   );
 
   return (
