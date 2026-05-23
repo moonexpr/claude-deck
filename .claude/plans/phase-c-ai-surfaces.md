@@ -140,7 +140,7 @@ No shared file overlap → safe parallel wave with `isaiah` (C4 logic), `david` 
 2. **Tauri key resolution.** `cargo tauri dev` (or built `.app`) reads key from OS keychain; with the key in keychain and **no** `ANTHROPIC_API_KEY` env var, chat works.
 3. **Confirm-before-exec.** With a stub model emitting `<execute>...</execute>`, **zero** PTY bytes until the human clicks Send. (Playwright assertion.)
 4. **Agents AI-suggest.** Suggestion lands in CM6 buffer; Save persists via existing PUT.
-5. **Migration safety.** `sqlx::migrate!()` applies cleanly to (a) a fresh DB and (b) the Phase-B DB with no data loss to existing tables.
+5. **Migration safety.** `sqlx::migrate!()` applies cleanly to a fresh DB. Data loss on existing DBs is explicitly permitted (PROMPTER policy, 2026-05-22): "quick and destructive upgrade preferred over careful one — not a lot of content on these databases". Future migrations may be destructive (DROP/recreate over careful ALTER).
 6. **No regressions.** Playwright sweep that was 61/61 green at Phase-B gate must remain 61/61 + new tests (≥ 65/65 total).
 7. **Legacy untouched.** `git diff main -- backend/ frontend/` empty.
 

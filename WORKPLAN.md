@@ -46,12 +46,14 @@ Post-Phase-B fixes from the PROMPTER's hands-on tailnet review: `server-bin` `FR
 
 - ✅ **C1** Server AI proxy — `/api/v1/ai/chat` (streaming Vercel Data-Stream) + `/suggest` (single-shot). reqwest + eventsource-stream → Anthropic Messages API. Integration tests 3/3 green. — `beed898` (service layer + `ServerConfig.anthropic_base_url`) · `60d7372` (handlers) · `d178132` (3 integration tests)
 - ✅ **C2** Tauri keyring → `ServerConfig.anthropic_api_key`. Raw `keyring` crate. `read_anthropic_key()` helper in `app/desktop/src-tauri/src/keychain.rs` — NoEntry/empty/error → `None`, never panics, never logs the key. — `e5da9d0`
-- ⬜ **C3** Chat panel feature + first `sqlx::migrate!` (migration `0001_chat_conversations.sql`, single table, messages as JSON-as-TEXT). — `isaiah` + `david`
+- 🔵 **C3** Chat panel feature + first `sqlx::migrate!`.
+  - ✅ C3a server — migration + CRUD route. — `46329d7` (migration) · `3d0a393` (CRUD) · `004d04c` (8 tests). Note: list endpoint is `/api/v1/chat` (no trailing slash; axum 0.8 strict).
+  - 🔵 C3b frontend — `app/web/src/features/chat/` + sidebar entry. — `david`
 - ⬜ **C4** cc-bridge AI augmentation — split-pane terminal+AI, inline preview with [Send]/[Edit]/[Discard], zero auto-exec. — `isaiah` + `john`
 - ⬜ **C5** AI-assisted config editing — Agents page template + reusable `AI_SUGGEST_PATTERN.md`. — `david` + `isaiah`
 - ⬜ **C6** CM6 for JSON surfaces — MCP, Permissions edit dialogs. — `david`
 
-**Phase C gate (7):** (1) `useChat` streams, no `x-api-key` in browser · (2) Tauri keyring path works offline-after-key · (3) stub `<execute>` → zero PTY bytes pre-Send · (4) Agents AI-suggest → CM6 → PUT round-trip · (5) `sqlx::migrate!` clean on fresh + Phase-B DB · (6) Playwright sweep ≥65/65 · (7) `git diff main -- backend/ frontend/` empty.
+**Phase C gate (7):** (1) `useChat` streams, no `x-api-key` in browser · (2) Tauri keyring path works offline-after-key · (3) stub `<execute>` → zero PTY bytes pre-Send · (4) Agents AI-suggest → CM6 → PUT round-trip · (5) `sqlx::migrate!` applies cleanly to a fresh DB (data-loss explicitly permitted on existing DBs per PROMPTER policy 2026-05-22) · (6) Playwright sweep ≥65/65 · (7) `git diff main -- backend/ frontend/` empty.
 
 ## Phase D — Build / cutover
 
