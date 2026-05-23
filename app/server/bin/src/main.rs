@@ -40,6 +40,9 @@ async fn main() -> anyhow::Result<()> {
 
     let anthropic_api_key: Option<String> = std::env::var("ANTHROPIC_API_KEY").ok();
 
+    let anthropic_base_url: String = std::env::var("ANTHROPIC_BASE_URL")
+        .unwrap_or_else(|_| "https://api.anthropic.com".to_string());
+
     let enable_external_tools: bool = std::env::var("ENABLE_EXTERNAL_TOOLS")
         .map(|v| !matches!(v.to_lowercase().as_str(), "0" | "false" | "no"))
         .unwrap_or(true);
@@ -74,6 +77,7 @@ async fn main() -> anyhow::Result<()> {
         frontend_dist_path,
         presence_public_url,
         anthropic_api_key,
+        anthropic_base_url,
         enable_external_tools,
         cwd_fallback,
     };

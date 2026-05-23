@@ -46,6 +46,9 @@ pub struct ApiState {
     /// configured. Carried here so `ai::post_chat` can report the diagnostic
     /// boolean without reading `std::env`.
     pub anthropic_api_key: Option<String>,
+    /// Base URL for the Anthropic API (default: `https://api.anthropic.com`).
+    /// Overridable in tests to point at a wiremock server.
+    pub anthropic_base_url: String,
 }
 
 pub fn router(
@@ -55,6 +58,7 @@ pub fn router(
     enable_external_tools: bool,
     cwd_fallback: PathBuf,
     anthropic_api_key: Option<String>,
+    anthropic_base_url: String,
 ) -> Router {
     let state = ApiState {
         pool,
@@ -63,6 +67,7 @@ pub fn router(
         enable_external_tools,
         cwd_fallback,
         anthropic_api_key,
+        anthropic_base_url,
     };
 
     Router::new()

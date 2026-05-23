@@ -38,8 +38,11 @@ pub struct ServerConfig {
     pub frontend_dist_path: Option<PathBuf>,
     /// Override base URL for presence event hooks (e.g. `https://deck.example.com`).
     pub presence_public_url: Option<String>,
-    /// Anthropic API key — carried through for future phases; unused for now.
+    /// Anthropic API key — used by the AI proxy handlers.
     pub anthropic_api_key: Option<String>,
+    /// Base URL for the Anthropic API. Defaults to `https://api.anthropic.com`.
+    /// Override in tests to point at a wiremock server.
+    pub anthropic_base_url: String,
     /// When `false`, PATH-dependent external-tool discovery is skipped and
     /// affected routes return the same empty/default result a missing tool yields.
     pub enable_external_tools: bool,
@@ -141,7 +144,7 @@ pub async fn app(config: ServerConfig) -> anyhow::Result<axum::Router> {
     // Build our application
     let mut router = Router::new()
         .route("/health", get(health))
-        .nest("/api/v1", api::v1::router(pool, config.projects_dir, config.presence_public_url, config.enable_external_tools, config.cwd_fallback, config.anthropic_api_key))
+        .nest("/api/v1", api::v1::router(pool, config.projects_dir, config.presence_public_url, config.enable_external_tools, config.cwd_fallback, config.anthropic_api_key, config.anthropic_base_url))
         .layer(cors);
 
     // Mount static frontend serving only when a dist path was supplied.

@@ -141,7 +141,7 @@ fn origin_netloc(origin: &str) -> Option<String> {
     }
 }
 
-fn is_same_origin(origin: &str, headers: &HeaderMap) -> bool {
+pub fn is_same_origin(origin: &str, headers: &HeaderMap) -> bool {
     let Some(origin_host) = origin_netloc(origin) else {
         return false;
     };
