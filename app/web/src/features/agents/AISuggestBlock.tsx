@@ -54,11 +54,10 @@ async function callSuggest(
   userRequest: string,
 ): Promise<SuggestResponse> {
   // The /suggest endpoint accepts { messages: [{role, content}] }.
-  // We encode the system prompt + context into the first user message because
-  // the server's Message type does not support a separate "system" role.
+  // The server's Message type now has a first-class "system" role, so we
+  // send the system prompt as a separate system message rather than packing
+  // it into the first user turn.
   const userContent = [
-    AGENT_SYSTEM_PROMPT,
-    '',
     'Current file content:',
     '```',
     currentValue,
@@ -71,7 +70,10 @@ async function callSuggest(
   return apiClient<SuggestResponse>('ai/suggest', {
     method: 'POST',
     body: JSON.stringify({
-      messages: [{ role: 'user', content: userContent }],
+      messages: [
+        { role: 'system', content: AGENT_SYSTEM_PROMPT },
+        { role: 'user', content: userContent },
+      ],
     }),
   })
 }
