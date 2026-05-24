@@ -11,7 +11,12 @@ path = "src/lib.rs"
 anyhow = "1.0.102"
 async-trait = "0.1"
 axum = { version = "0.8.9", features = ["ws"] }
-claudecode_ext_core = { path = "../../../../../app/claudecode_ext/crates/core" }
+# claudecode_ext_core ships as a sibling repo (moonexpr/claudecode_ext). The
+# framework's status is "experimental" — Claude Code's auth flow is an
+# Anthropic internal implementation detail that can change without notice — so
+# we track `main` and let Cargo.lock pin the resolved rev for CI
+# reproducibility. Bump via `cargo update -p claudecode_ext_core`.
+claudecode_ext_core = { git = "https://github.com/moonexpr/claudecode_ext", branch = "main" }
 bytes = "1"
 chrono = { version = "0.4.44", features = ["serde"] }
 dirs = "6.0.0"

@@ -439,6 +439,7 @@ dependencies = [
 [[package]]
 name = "claudecode_ext_core"
 version = "0.1.0"
+source = "git+https://github.com/moonexpr/claudecode_ext?branch=main#1bd17507716d802b4acb4c7484cd40e400f558b8"
 dependencies = [
  "anyhow",
  "base64",
