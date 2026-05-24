@@ -14,6 +14,33 @@ import {
 } from './api'
 import type { ConversationSummary, Message } from './types'
 
+/** Shape of the 503 `ErrorBody` from `/api/v1/ai/chat` we care about. */
+type UnavailableInfo = {
+  keySource: 'oauth' | 'api_key' | null
+  detail: string
+}
+
+/** Pull the JSON `ErrorBody` out of a useChat error.message string. */
+function parseUnavailableInfo(rawMessage: string): UnavailableInfo | null {
+  const start = rawMessage.indexOf('{')
+  const end = rawMessage.lastIndexOf('}')
+  if (start < 0 || end <= start) return null
+  try {
+    const body = JSON.parse(rawMessage.slice(start, end + 1)) as {
+      status?: string
+      detail?: string
+      key_source?: 'oauth' | 'api_key' | null
+    }
+    if (body.status !== 'unavailable') return null
+    return {
+      keySource: body.key_source ?? null,
+      detail: body.detail ?? '',
+    }
+  } catch {
+    return null
+  }
+}
+
 /** Strip useChat-local fields (id, createdAt) before persisting to server. */
 function toServerMessages(uiMessages: UIMessage[]): Message[] {
   return uiMessages
@@ -43,7 +70,7 @@ export function ChatPage() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [activeId, setActiveId] = useState<number | null>(null)
   const [isCreating, setIsCreating] = useState(false)
-  const [unavailableBanner, setUnavailableBanner] = useState(false)
+  const [unavailableInfo, setUnavailableInfo] = useState<UnavailableInfo | null>(null)
   /** On mobile: whether the sidebar is showing (vs the transcript). */
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(true)
   /** Tracks whether the auto-title has already fired for the active conversation. */
@@ -104,12 +131,21 @@ export function ChatPage() {
     ),
   })
 
-  // Detect 503 from the streaming endpoint (no API key configured).
+  // Detect 503 from the streaming endpoint (no usable credential).
+  // The server's ErrorBody carries `key_source: "oauth" | "api_key" | null`,
+  // so the banner can tell the user *which* path is broken — OAuth (launch
+  // `claude_ext` first) vs API key (set ANTHROPIC_API_KEY / keychain) vs
+  // nothing configured.
   useEffect(() => {
     if (!error) return
     const msg = error.message ?? ''
-    if (msg.includes('503') || msg.toLowerCase().includes('service unavailable')) {
-      setUnavailableBanner(true)
+    const is503 = msg.includes('503') || msg.toLowerCase().includes('service unavailable')
+    const parsed = parseUnavailableInfo(msg)
+    if (parsed) {
+      setUnavailableInfo(parsed)
+    } else if (is503) {
+      // Fall back to the unknown-source variant when we can't parse the body.
+      setUnavailableInfo({ keySource: null, detail: '' })
     }
   }, [error])
 
@@ -222,15 +258,32 @@ export function ChatPage() {
         </button>
       </div>
 
-      {/* 503 / no-key banner */}
-      {unavailableBanner && (
+      {/* 503 / no-credential banner — copy branches on the server's key_source. */}
+      {unavailableInfo && (
         <div className="mx-3 mt-3 flex gap-2 items-start rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/20 dark:text-amber-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>
-            AI chat unavailable — <code className="font-mono text-xs">anthropic_api_key</code> not
-            configured. Set it in the OS keychain (Tauri) or{' '}
-            <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> env (server-bin).
-          </span>
+          {unavailableInfo.keySource === 'oauth' ? (
+            <span>
+              AI chat unavailable — no Claude Code OAuth bearer observed yet. Run{' '}
+              <code className="font-mono text-xs">claude_ext</code> (or launch Claude Code
+              once through it) so <code className="font-mono text-xs">claudecode_ext</code>{' '}
+              can capture the bearer.
+            </span>
+          ) : unavailableInfo.keySource === 'api_key' ? (
+            <span>
+              AI chat unavailable — <code className="font-mono text-xs">anthropic_api_key</code>{' '}
+              not configured. Set it in the OS keychain (Tauri) or{' '}
+              <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> env (server-bin).
+            </span>
+          ) : (
+            <span>
+              AI chat unavailable — no credential source configured. Either set{' '}
+              <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> (server-bin) /
+              keychain (Tauri), or enable the OAuth path via{' '}
+              <code className="font-mono text-xs">claudecode_ext</code> (set{' '}
+              <code className="font-mono text-xs">CLAUDECODE_EXT_KEY_SOURCE=oauth</code>).
+            </span>
+          )}
         </div>
       )}
 
