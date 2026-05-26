@@ -20,6 +20,7 @@ pub mod status;
 pub mod statusline;
 pub mod usage;
 
+use crate::services::ai::key_provider::KeyProvider;
 use crate::services::session_service::SessionService;
 use axum::{Router, routing::get};
 use sqlx::SqlitePool;
@@ -40,10 +41,10 @@ pub struct ApiState {
     /// query param was provided. Captured once by the embedder; never via
     /// `std::env::current_dir()` inside the library.
     pub cwd_fallback: PathBuf,
-    /// Anthropic API key resolved by the embedder. `None` means no key was
-    /// configured. Carried here so `ai::post_chat` can report the diagnostic
-    /// boolean without reading `std::env`.
-    pub anthropic_api_key: Option<String>,
+    /// Resolves the Anthropic credential per request. `None` means no
+    /// credential source configured — `ai::post_chat` returns 503 with
+    /// `key_source: null`.
+    pub key_provider: Option<Arc<dyn KeyProvider>>,
     /// Base URL for the Anthropic API (default: `https://api.anthropic.com`).
     /// Overridable in tests to point at a wiremock server.
     pub anthropic_base_url: String,
@@ -55,7 +56,7 @@ pub fn router(
     presence_public_url: Option<String>,
     enable_external_tools: bool,
     cwd_fallback: PathBuf,
-    anthropic_api_key: Option<String>,
+    key_provider: Option<Arc<dyn KeyProvider>>,
     anthropic_base_url: String,
 ) -> Router {
     let state = ApiState {
@@ -64,7 +65,7 @@ pub fn router(
         presence_public_url,
         enable_external_tools,
         cwd_fallback,
-        anthropic_api_key,
+        key_provider,
         anthropic_base_url,
     };
 

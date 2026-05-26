@@ -28,7 +28,7 @@ fn make_config(tmp: &std::path::Path) -> server_core::ServerConfig {
         projects_dir: tmp.join("projects"),
         frontend_dist_path: None,
         presence_public_url: None,
-        anthropic_api_key: None,
+        key_source: server_core::KeySource::None,
         anthropic_base_url: "https://api.anthropic.com".to_string(),
         enable_external_tools: false,
         cwd_fallback: tmp.to_path_buf(),
@@ -62,6 +62,7 @@ async fn get(router: &axum::Router, uri: &str) -> u16 {
         .as_u16()
 }
 
+#[allow(dead_code)]
 async fn post_empty(router: &axum::Router, uri: &str) -> u16 {
     let req = axum::http::Request::builder()
         .method("POST")
@@ -316,7 +317,7 @@ async fn spa_fallback_returns_200_for_client_routes() {
         projects_dir: tmp.join("projects"),
         frontend_dist_path: Some(dist.clone()),
         presence_public_url: None,
-        anthropic_api_key: None,
+        key_source: server_core::KeySource::None,
         anthropic_base_url: "https://api.anthropic.com".to_string(),
         enable_external_tools: false,
         cwd_fallback: tmp.clone(),

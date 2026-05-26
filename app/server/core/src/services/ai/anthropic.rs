@@ -5,13 +5,25 @@
 ///   complete_messages — returns the full text and token usage synchronously
 ///
 /// Neither function reads environment variables. All config is passed in.
+/// As of D7, the credential is an `AuthCredential` (api-key vs bearer) so
+/// the OAuth-via-claudecode_ext path can flow through the same code.
 use anyhow::{Context, anyhow};
 use eventsource_stream::Eventsource;
 use futures::stream::{Stream, StreamExt};
-use reqwest::Client;
+use reqwest::{Client, RequestBuilder};
 use serde::{Deserialize, Serialize};
 
 use super::Message;
+use super::key_provider::AuthCredential;
+
+/// Set the right auth header on a request based on the credential variant.
+/// `anthropic-version` and `content-type` are set by the caller separately.
+fn apply_auth(req: RequestBuilder, auth: &AuthCredential) -> RequestBuilder {
+    match auth {
+        AuthCredential::ApiKey(k) => req.header("x-api-key", k),
+        AuthCredential::Bearer(b) => req.header("authorization", format!("Bearer {b}")),
+    }
+}
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const DEFAULT_MODEL: &str = "claude-sonnet-4-5";
@@ -98,7 +110,7 @@ fn build_request_body(model: &str, messages: &[Message], stream: bool) -> serde_
 pub async fn stream_messages(
     client: Client,
     base_url: String,
-    api_key: String,
+    auth: AuthCredential,
     model: Option<String>,
     messages: Vec<Message>,
 ) -> anyhow::Result<impl Stream<Item = anyhow::Result<AnthropicEvent>>> {
@@ -106,12 +118,12 @@ pub async fn stream_messages(
     let url = format!("{}/v1/messages", base_url.trim_end_matches('/'));
     let body = build_request_body(model_str, &messages, true);
 
-    let resp = client
+    let req = client
         .post(&url)
-        .header("x-api-key", &api_key)
         .header("anthropic-version", ANTHROPIC_VERSION)
         .header("content-type", "application/json")
-        .json(&body)
+        .json(&body);
+    let resp = apply_auth(req, &auth)
         .send()
         .await
         .context("failed to connect to Anthropic API")?;
@@ -199,7 +211,7 @@ fn parse_event(event_type: &str, data: &str) -> anyhow::Result<AnthropicEvent> {
 pub async fn complete_messages(
     client: Client,
     base_url: String,
-    api_key: String,
+    auth: AuthCredential,
     model: Option<String>,
     messages: Vec<Message>,
 ) -> anyhow::Result<(String, Usage)> {
@@ -207,12 +219,12 @@ pub async fn complete_messages(
     let url = format!("{}/v1/messages", base_url.trim_end_matches('/'));
     let body = build_request_body(model_str, &messages, false);
 
-    let resp = client
+    let req = client
         .post(&url)
-        .header("x-api-key", &api_key)
         .header("anthropic-version", ANTHROPIC_VERSION)
         .header("content-type", "application/json")
-        .json(&body)
+        .json(&body);
+    let resp = apply_auth(req, &auth)
         .send()
         .await
         .context("failed to connect to Anthropic API")?;

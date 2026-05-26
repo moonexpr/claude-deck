@@ -62,14 +62,39 @@ pub fn run() {
 
             let cwd_fallback = app_data_dir.clone();
 
-            let anthropic_api_key = keychain::read_anthropic_key();
+            // D8: Credential auto-detect.
+            //   1. If the user has a (claude-deck, anthropic_api_key) entry
+            //      in the keychain → use it.
+            //   2. Else if Claude Code itself is logged in (probed via
+            //      `security find-generic-password -s 'Claude Code-credentials'`
+            //      which does NOT trigger Touch ID since the value isn't read)
+            //      → spawn the claudecode_ext framework and observe Claude
+            //      Code's bearer.
+            //   3. Else → AI proxy returns 503 until the user configures one.
+            //
+            // Explicit override via a Tauri settings UI lands later; for v1
+            // the auto-fallback matches the issue #4 acceptance ("Tauri build
+            // picks up the same OAuth creds when no anthropic_api_key
+            // keychain entry exists").
+            let key_source = if let Some(k) = keychain::read_anthropic_key() {
+                server_core::KeySource::ApiKey(k)
+            } else if keychain::claude_code_oauth_present() {
+                tracing::info!(
+                    "no claude-deck API key; Claude Code OAuth detected — using claudecode_ext",
+                );
+                server_core::KeySource::ClaudeCodeOAuth {
+                    config: server_core::claudecode_ext_core::Config::default(),
+                }
+            } else {
+                server_core::KeySource::None
+            };
 
             let config = server_core::ServerConfig {
                 db_url,
                 projects_dir,
                 frontend_dist_path: None, // Tauri serves the UI; server is API-only
                 presence_public_url: None,
-                anthropic_api_key,
+                key_source,
                 anthropic_base_url: "https://api.anthropic.com".to_string(),
                 enable_external_tools: true,
                 cwd_fallback,

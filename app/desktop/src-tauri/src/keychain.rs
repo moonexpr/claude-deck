@@ -33,3 +33,46 @@ pub fn read_anthropic_key() -> Option<String> {
         }
     }
 }
+
+/// Probe whether a Claude Code OAuth credential entry exists in the keychain
+/// **without reading its value** (so no Touch ID / password prompt fires).
+///
+/// macOS only — uses the `security` command's metadata lookup, which exits 0
+/// when the entry exists and 44 (errSecItemNotFound) when it doesn't. The
+/// value is never extracted, so the system never asks the user to authorize
+/// access to Claude Code's keychain item.
+///
+/// Used by the Tauri build to auto-fall-back to `KeySource::ClaudeCodeOAuth`
+/// when no claude-deck API key is configured but Claude Code itself is
+/// logged in. Returns `false` on non-macOS platforms (where `security` is
+/// absent) — those platforms still need explicit configuration.
+pub fn claude_code_oauth_present() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let status = std::process::Command::new("/usr/bin/security")
+            .args(["find-generic-password", "-s", "Claude Code-credentials"])
+            // Suppress stdout (metadata dump) and stderr (errSec…) — we only
+            // care about the exit code. Both go to /dev/null.
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        match status {
+            Ok(s) if s.success() => {
+                tracing::debug!("keychain: Claude Code-credentials present");
+                true
+            }
+            Ok(_) => {
+                tracing::debug!("keychain: Claude Code-credentials absent");
+                false
+            }
+            Err(e) => {
+                tracing::debug!("keychain: failed to invoke security: {e}");
+                false
+            }
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}

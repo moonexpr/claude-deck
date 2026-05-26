@@ -8,11 +8,30 @@
 ///   3. happy_path_streams_data_frames — valid SSE stream        → Vercel Data Stream frames
 use axum::body::Body;
 use http_body_util::BodyExt;
+use std::sync::Arc;
 use tower::ServiceExt;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{method, path},
+    matchers::{header, method, path},
 };
+
+use server_core::services::ai::key_provider::{AuthCredential, KeyProvider};
+
+/// Stub provider for tests — returns a fixed credential.
+struct FixedProvider {
+    cred: AuthCredential,
+    label: &'static str,
+}
+
+#[async_trait::async_trait]
+impl KeyProvider for FixedProvider {
+    async fn current_credential(&self) -> Option<AuthCredential> {
+        Some(self.cred.clone())
+    }
+    fn label(&self) -> &'static str {
+        self.label
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,13 +58,26 @@ fn make_config_with_key(
     anthropic_base_url: String,
     api_key: Option<String>,
 ) -> server_core::ServerConfig {
+    let key_source = match api_key {
+        Some(k) => server_core::KeySource::ApiKey(k),
+        None => server_core::KeySource::None,
+    };
+    make_config_with_key_source(tmp, anthropic_base_url, key_source)
+}
+
+/// Build a `ServerConfig` with an arbitrary KeySource (api_key vs oauth).
+fn make_config_with_key_source(
+    tmp: &std::path::Path,
+    anthropic_base_url: String,
+    key_source: server_core::KeySource,
+) -> server_core::ServerConfig {
     let db_url = format!("sqlite:{}?mode=rwc", tmp.join("test.db").display());
     server_core::ServerConfig {
         db_url,
         projects_dir: tmp.join("projects"),
         frontend_dist_path: None,
         presence_public_url: None,
-        anthropic_api_key: api_key,
+        key_source,
         anthropic_base_url,
         enable_external_tools: false,
         cwd_fallback: tmp.to_path_buf(),
@@ -104,6 +136,98 @@ async fn no_key_returns_503() {
         body["status"], "unavailable",
         "status field; body: {}",
         body
+    );
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+// ---------------------------------------------------------------------------
+// Test 1b: no_key with OAuth label → 503 with `key_source: "oauth"`
+// ---------------------------------------------------------------------------
+
+/// When the configured KeyProvider has the "oauth" label but returns
+/// `None` (no bearer observed yet), the 503 body should carry
+/// `key_source: "oauth"` so the UI can suggest "launch Claude Code".
+#[tokio::test]
+async fn no_oauth_bearer_returns_503_with_oauth_label() {
+    struct NoneProvider;
+    #[async_trait::async_trait]
+    impl KeyProvider for NoneProvider {
+        async fn current_credential(&self) -> Option<AuthCredential> { None }
+        fn label(&self) -> &'static str { "oauth" }
+    }
+
+    let tmp = make_tmp();
+    let config = make_config_with_key_source(
+        &tmp,
+        "https://api.anthropic.com".to_string(),
+        server_core::KeySource::Custom(Arc::new(NoneProvider)),
+    );
+    let router = server_core::app(config).await.expect("app");
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/v1/ai/chat")
+        .header("content-type", "application/json")
+        .header("origin", TEST_ORIGIN)
+        .header("host", TEST_HOST)
+        .body(Body::from(CHAT_BODY))
+        .unwrap();
+    let resp = router.oneshot(req).await.unwrap();
+    assert_eq!(resp.status().as_u16(), 503);
+
+    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(body["key_source"], serde_json::Value::String("oauth".to_string()));
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+// ---------------------------------------------------------------------------
+// Test 1c: OAuth path sends `Authorization: Bearer …` (not x-api-key)
+// ---------------------------------------------------------------------------
+
+/// Wiremock asserts the outbound request carries `Authorization: Bearer <token>`
+/// and NOT `x-api-key` when the configured provider returns Bearer.
+#[tokio::test]
+async fn oauth_path_sends_authorization_bearer_header() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/messages"))
+        .and(header("authorization", "Bearer test-bearer-xyz"))
+        .respond_with(ResponseTemplate::new(200)
+            .insert_header("content-type", "text/event-stream")
+            .set_body_string("event: message_stop\ndata: {}\n\n"))
+        .mount(&mock_server)
+        .await;
+
+    let tmp = make_tmp();
+    let provider = Arc::new(FixedProvider {
+        cred: AuthCredential::Bearer("test-bearer-xyz".to_string()),
+        label: "oauth",
+    });
+    let config = make_config_with_key_source(
+        &tmp,
+        mock_server.uri(),
+        server_core::KeySource::Custom(provider),
+    );
+    let router = server_core::app(config).await.expect("app");
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/api/v1/ai/chat")
+        .header("content-type", "application/json")
+        .header("origin", TEST_ORIGIN)
+        .header("host", TEST_HOST)
+        .body(Body::from(CHAT_BODY))
+        .unwrap();
+
+    let resp = router.oneshot(req).await.unwrap();
+    assert_eq!(
+        resp.status().as_u16(),
+        200,
+        "wiremock matched on Authorization: Bearer header (would 404 otherwise)",
     );
 
     let _ = std::fs::remove_dir_all(&tmp);
