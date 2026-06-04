@@ -21,7 +21,7 @@ use sqlx::{Row, SqlitePool};
 use crate::services::headless_claude;
 use crate::services::session_service::SessionService;
 
-const ANALYZER_VERSION: &str = "m2.0-headless";
+const ANALYZER_VERSION: &str = "m2.1-headless-idx";
 
 // ---------------------------------------------------------------------------
 // Response shape (also the cache-reload shape)
@@ -70,16 +70,19 @@ pub struct SessionInsight {
 // Transcript → grounding units
 // ---------------------------------------------------------------------------
 
-/// One grounding unit (a conversation): a stable `locator` and the flattened
-/// text the model may quote from.
+/// One grounding unit (a conversation): a model-facing `index` (the short
+/// citation key), a stable `locator` (timestamp — the key the transcript viewer
+/// scrolls by, stored as provenance), and the flattened text to quote from.
 struct Entry {
+    index: usize,
     locator: String,
     text: String,
 }
 
-/// Load all pages of a session and flatten conversations into grounding units
-/// plus a prompt rendering. Locator = the conversation timestamp (the same key
-/// the transcript viewer scrolls by).
+/// Load all pages of a session and flatten conversations into grounding units.
+/// Each entry gets a 1-based `index` (the `[entry N]` citation key shown to the
+/// model — short, so it can reproduce it exactly) while its `locator` keeps the
+/// conversation timestamp the transcript viewer scrolls by.
 async fn load_entries(
     session_service: &SessionService,
     project: &str,
@@ -116,18 +119,23 @@ async fn load_entries(
                     }
                 }
             }
-            entries.push(Entry { locator: convo.timestamp.clone(), text });
+            entries.push(Entry {
+                index: entries.len() + 1,
+                locator: convo.timestamp.clone(),
+                text,
+            });
         }
     }
     Ok(entries)
 }
 
-/// Render the transcript for the prompt, tagging each entry with its locator so
-/// the model cites the same string back.
+/// Render the transcript for the prompt, tagging each entry with its short index
+/// so the model cites a value it can reproduce exactly (a 30-char ISO timestamp
+/// it cannot — that drove the citation-error rate to ~100% on long sessions).
 fn render_prompt(entries: &[Entry]) -> String {
     let mut out = String::new();
     for e in entries {
-        out.push_str(&format!("[entry {}]\n{}\n\n", e.locator, e.text.trim()));
+        out.push_str(&format!("[entry {}]\n{}\n\n", e.index, e.text.trim()));
     }
     out
 }
@@ -139,6 +147,7 @@ fn input_hash(model: &str, entries: &[Entry]) -> String {
     ANALYZER_VERSION.hash(&mut h);
     model.hash(&mut h);
     for e in entries {
+        e.index.hash(&mut h);
         e.locator.hash(&mut h);
         e.text.hash(&mut h);
     }
@@ -149,20 +158,40 @@ fn normalize_ws(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-#[derive(PartialEq)]
 enum Gate {
-    Ok,
+    /// Resolved provenance: the entry's `locator` (timestamp) to persist.
+    Ok(String),
     Citation,
     Groundedness,
 }
 
-/// The two-check provenance gate.
-fn gate(locator: &str, quote: &str, entries: &HashMap<String, String>) -> Gate {
-    match entries.get(locator) {
+/// Extract the entry index from a model-supplied `source_ref`. Accepts "5",
+/// "entry 5", "[entry 5]", or "[entry 5] trailing" — the first run of digits
+/// wins; no digits → no citation.
+fn parse_entry_index(source_ref: &str) -> Option<usize> {
+    let digits: String = source_ref
+        .chars()
+        .skip_while(|c| !c.is_ascii_digit())
+        .take_while(|c| c.is_ascii_digit())
+        .collect();
+    digits.parse().ok()
+}
+
+/// The two-check provenance gate. `lookup` maps each entry's index to its
+/// `(locator, text)`. Citation passes when `source_ref` names a real entry;
+/// groundedness passes when `quote` is a whitespace-normalized substring of it.
+/// On success returns the entry's locator so the timestamp — not the volatile
+/// index — is what gets stored as provenance.
+fn gate(source_ref: &str, quote: &str, lookup: &HashMap<usize, (String, String)>) -> Gate {
+    let idx = match parse_entry_index(source_ref) {
+        Some(i) => i,
+        None => return Gate::Citation,
+    };
+    match lookup.get(&idx) {
         None => Gate::Citation,
-        Some(entry_text) => {
-            if normalize_ws(entry_text).contains(&normalize_ws(quote)) {
-                Gate::Ok
+        Some((locator, text)) => {
+            if normalize_ws(text).contains(&normalize_ws(quote)) {
+                Gate::Ok(locator.clone())
             } else {
                 Gate::Groundedness
             }
@@ -175,7 +204,7 @@ Respond with ONLY a JSON object (no prose, no markdown fence) of EXACTLY this sh
 {\"summary\": string, \"decisions\": [{\"text\": string, \"source_ref\": string, \"quote\": string}], \
 \"judgment_calls\": [{\"summary\": string, \"options\": [string], \"chosen\": string, \"rationale\": string, \"source_ref\": string, \"quote\": string}], \
 \"errors_hit\": [{\"text\": string, \"source_ref\": string, \"quote\": string}], \"follow_ups\": [string]}. \
-Rules: (1) For every decision, judgment_call, and error, set source_ref to the [entry <locator>] tag you drew it from, and set quote to an EXACT verbatim span copied from that entry's text. \
+Rules: (1) For every decision, judgment_call, and error, set source_ref to the entry NUMBER you drew it from (the integer N in its [entry N] tag, e.g. \"7\"), and set quote to an EXACT verbatim span copied from that entry's text. \
 (2) Emit nothing you cannot quote. (3) summary and follow_ups are session-level and do not cite. \
 A judgment_call is a point where a choice was made between alternatives.";
 
@@ -257,8 +286,10 @@ async fn run_inference_and_persist(
     run_id: i64,
     entries: &[Entry],
 ) -> Result<()> {
-    let lookup: HashMap<String, String> =
-        entries.iter().map(|e| (e.locator.clone(), e.text.clone())).collect();
+    let lookup: HashMap<usize, (String, String)> = entries
+        .iter()
+        .map(|e| (e.index, (e.locator.clone(), e.text.clone())))
+        .collect();
 
     let (input, usage) = headless_claude::run_structured(
         claude_bin,
@@ -293,8 +324,8 @@ async fn run_inference_and_persist(
                 match gate(loc, quote, &lookup) {
                     Gate::Citation => citation_error += 1,
                     Gate::Groundedness => groundedness_error += 1,
-                    Gate::Ok => {
-                        let source_id = insert_source(&mut tx, target_ref, loc).await?;
+                    Gate::Ok(locator) => {
+                        let source_id = insert_source(&mut tx, target_ref, &locator).await?;
                         insert_insight(&mut tx, run_id, Some(source_id), Some(quote), kind, text, severity).await?;
                     }
                 }
@@ -310,8 +341,8 @@ async fn run_inference_and_persist(
             match gate(loc, quote, &lookup) {
                 Gate::Citation => citation_error += 1,
                 Gate::Groundedness => groundedness_error += 1,
-                Gate::Ok => {
-                    let source_id = insert_source(&mut tx, target_ref, loc).await?;
+                Gate::Ok(locator) => {
+                    let source_id = insert_source(&mut tx, target_ref, &locator).await?;
                     let options_json = item
                         .get("options")
                         .map(|v| v.to_string())
@@ -463,29 +494,44 @@ pub async fn load_session_insight(pool: &SqlitePool, run_id: i64) -> Result<Sess
 mod tests {
     use super::*;
 
-    fn entries() -> HashMap<String, String> {
+    /// Index 1 → (timestamp locator, text). Locator is what a passing gate stores.
+    fn lookup() -> HashMap<usize, (String, String)> {
         let mut m = HashMap::new();
-        m.insert("ts-1".to_string(), "We merged PR nine after validation.".to_string());
+        m.insert(1, ("ts-1".to_string(), "We merged PR nine after validation.".to_string()));
         m
     }
 
     #[test]
-    fn gate_ok_when_locator_resolves_and_quote_present() {
-        assert!(gate("ts-1", "merged PR nine", &entries()) == Gate::Ok);
+    fn parse_index_accepts_bare_tagged_and_trailing() {
+        assert_eq!(parse_entry_index("7"), Some(7));
+        assert_eq!(parse_entry_index("entry 7"), Some(7));
+        assert_eq!(parse_entry_index("[entry 7]"), Some(7));
+        assert_eq!(parse_entry_index("[entry 7] trailing"), Some(7));
+        assert_eq!(parse_entry_index("no digits"), None);
     }
 
     #[test]
-    fn gate_citation_error_when_locator_missing() {
-        assert!(gate("ts-404", "anything", &entries()) == Gate::Citation);
+    fn gate_ok_resolves_to_locator_when_index_and_quote_match() {
+        assert!(matches!(gate("[entry 1]", "merged PR nine", &lookup()), Gate::Ok(l) if l == "ts-1"));
+    }
+
+    #[test]
+    fn gate_citation_error_when_index_missing() {
+        assert!(matches!(gate("[entry 404]", "anything", &lookup()), Gate::Citation));
+    }
+
+    #[test]
+    fn gate_citation_error_when_source_ref_has_no_index() {
+        assert!(matches!(gate("a timestamp", "anything", &lookup()), Gate::Citation));
     }
 
     #[test]
     fn gate_groundedness_error_when_quote_absent() {
-        assert!(gate("ts-1", "deleted the database", &entries()) == Gate::Groundedness);
+        assert!(matches!(gate("1", "deleted the database", &lookup()), Gate::Groundedness));
     }
 
     #[test]
     fn gate_tolerates_whitespace_differences() {
-        assert!(gate("ts-1", "merged   PR\n nine", &entries()) == Gate::Ok);
+        assert!(matches!(gate("entry 1", "merged   PR\n nine", &lookup()), Gate::Ok(_)));
     }
 }

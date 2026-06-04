@@ -76,17 +76,17 @@ fn success_envelope() -> String {
         "summary": "Worked the open PR queue to resolution.",
         "decisions": [
             { "text": "cites a turn that does not exist",
-              "source_ref": "NO-SUCH-TIMESTAMP", "quote": "irrelevant" }
+              "source_ref": "[entry 99]", "quote": "irrelevant" }
         ],
         "judgment_calls": [
             { "summary": "merge PR nine", "options": ["merge", "hold"],
               "chosen": "merge", "rationale": "fully validated, closes a tracked bug",
-              "source_ref": "2026-06-04T10:00:00Z",
+              "source_ref": "[entry 1]",
               "quote": "merged PR nine after independent validation" }
         ],
         "errors_hit": [
             { "text": "this quote is not in the transcript",
-              "source_ref": "2026-06-04T10:00:00Z",
+              "source_ref": "[entry 1]",
               "quote": "a phrase that appears nowhere in the session" }
         ],
         "follow_ups": ["write the docs"]
