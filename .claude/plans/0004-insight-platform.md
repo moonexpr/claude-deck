@@ -93,7 +93,7 @@ Migrations via `sqlx-migrate` (already adopted in the lift). `embedding` backed 
 
 - **A. Source of truth — RESOLVED: derived/rebuildable.** Files stay canonical; the DB is a re-buildable index + lifecycle store (`DELETE` + re-run reproduces every row). No two-way file sync in M0/M1.
 - **B. Corpus scope — RESOLVED: multi-source, sessions-first.** Schema admits all sources (sessions, journals, INBOX, memory, git) with no migration; ingest **sessions** in M1, layer journals/memory/git in M2–M3. (claude-deck already reads the *global* `~/.claude/projects/`, so the corpus is cross-project from day one.)
-- **C. Structured output — RESOLVED: forced tool-use.** Inference uses Anthropic `tools` + `tool_choice:{type:tool}` for schema-constrained artifacts (see 0004a), not JSON scraping.
+- **C. Inference path — RESOLVED (revised): headless Claude Code, not the Anthropic API.** `analyze_session` spawns `claude -p --output-format json` (subscription auth; `ANTHROPIC_API_KEY` removed from the child env so it doesn't route to depleted API credits). Structured output is strict-JSON-in-prompt rather than forced tool-use — the claim-level provenance gate, not schema-validity, is the anti-hallucination floor (HF research), so losing the tool-use schema guarantee is acceptable. *(Supersedes the original "forced tool-use via API" call.)*
 
 ## 9. Effort estimate & phasing
 

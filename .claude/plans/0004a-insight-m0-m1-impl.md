@@ -1,6 +1,7 @@
 # Plan 0004a — Insight Platform M0 + M1 (implementation spec)
 
-> **Status:** Implementation-ready. Companion to Plan 0004 (§7 M0–M1). Scoped to be a single `/sprint`.
+> **Status:** IMPLEMENTED (PR #13). Companion to Plan 0004 (§7 M0–M1).
+> **Revision (2026-06-04):** Inference pivoted from the Anthropic API (`complete_structured`, forced tool-use — §M1 below, kept for history) to **headless Claude Code** (`services/headless_claude.rs`: `claude -p --output-format json`, subscription auth, `ANTHROPIC_API_KEY` stripped from the child). Structured output is now strict-JSON-in-prompt; the provenance gate is unchanged and remains the anti-hallucination floor. The wiremock test became a stub-`claude`-script test. Also shipped alongside: the previously-stubbed session **list** endpoints (`/sessions`, `/sessions/projects`, `/sessions/dashboard/stats`), without which nothing was browsable.
 > **Goal:** Ship the artifact data model (M0) and one end-to-end vertical slice — the per-session insight card (M1) — exercising Ingest → Derive → Structure → Surface on a single session.
 > **Grounding facts (verified 2026-06-04):**
 > - `ApiState` (`api/v1/mod.rs`) already holds `pool: SqlitePool`, `session_service: Arc<SessionService>`, `key_provider: Option<Arc<dyn KeyProvider>>`, `anthropic_base_url: String`. **No state plumbing needed.**
