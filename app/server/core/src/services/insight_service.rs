@@ -212,6 +212,14 @@ pub async fn analyze_session(
         if status == "done" {
             return load_session_insight(pool, run_id).await;
         }
+        // A stale run (error/running/pending) holds this exact (kind, input_hash)
+        // under the UNIQUE index. An errored run committed no artifacts (its tx
+        // rolled back), so deleting it lets a retry re-run instead of hitting a
+        // 2067 UNIQUE constraint violation on insert.
+        sqlx::query("DELETE FROM analysis_runs WHERE id = ?")
+            .bind(run_id)
+            .execute(pool)
+            .await?;
     }
 
     // New run.

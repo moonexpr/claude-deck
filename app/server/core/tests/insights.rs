@@ -37,13 +37,15 @@ fn make_tmp() -> PathBuf {
     tmp
 }
 
-/// Build a stub `claude` that ignores its args, records each invocation, and
-/// prints `envelope_json`. Returns the script path (use as `claude_bin`).
-fn write_stub(tmp: &Path, envelope_json: &str) -> PathBuf {
-    let env_path = tmp.join("envelope.json");
+/// Build a stub `claude` under `dir` that ignores its args, records each
+/// invocation in `dir/calls.txt`, and prints `envelope_json`. Returns the
+/// script path (use as `claude_bin`).
+fn write_stub_in(dir: &Path, envelope_json: &str) -> PathBuf {
+    std::fs::create_dir_all(dir).unwrap();
+    let env_path = dir.join("envelope.json");
     std::fs::write(&env_path, envelope_json).unwrap();
-    let calls = tmp.join("calls.txt");
-    let script = tmp.join("claude-stub.sh");
+    let calls = dir.join("calls.txt");
+    let script = dir.join("claude-stub.sh");
     let body = format!(
         "#!/bin/sh\necho run >> \"{}\"\ncat \"{}\"\n",
         calls.display(),
@@ -54,6 +56,10 @@ fn write_stub(tmp: &Path, envelope_json: &str) -> PathBuf {
     perms.set_mode(0o755);
     std::fs::set_permissions(&script, perms).unwrap();
     script
+}
+
+fn write_stub(tmp: &Path, envelope_json: &str) -> PathBuf {
+    write_stub_in(tmp, envelope_json)
 }
 
 fn call_count(tmp: &Path) -> usize {
@@ -173,4 +179,31 @@ async fn claude_is_error_surfaces_as_err() {
     let res = analyze_session(&pool, &ss, stub.to_str().unwrap(), None, "proj", "sess").await;
     let err = res.expect_err("is_error envelope must fail").to_string();
     assert!(err.contains("Credit balance"), "got: {err}");
+}
+
+#[tokio::test]
+async fn retry_after_error_does_not_hit_unique_constraint() {
+    let tmp = make_tmp();
+    let pool = migrate_and_pool(&tmp).await;
+    let ss = SessionService::new(tmp.join("projects"));
+
+    // First attempt errors → leaves a stale (status='error') run holding this
+    // (kind, input_hash) under the UNIQUE index.
+    let err = write_stub_in(
+        &tmp.join("err"),
+        &serde_json::json!({ "is_error": true, "result": "boom" }).to_string(),
+    );
+    assert!(
+        analyze_session(&pool, &ss, err.to_str().unwrap(), None, "proj", "sess")
+            .await
+            .is_err()
+    );
+
+    // Retry with the SAME input must NOT hit a 2067 UNIQUE violation — the stale
+    // run is deleted first.
+    let ok = write_stub_in(&tmp.join("ok"), &success_envelope());
+    let insight = analyze_session(&pool, &ss, ok.to_str().unwrap(), None, "proj", "sess")
+        .await
+        .expect("retry after error must succeed");
+    assert_eq!(insight.status, "done");
 }
