@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+import { ArrowUpRight } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -69,7 +71,17 @@ export function ActiveSessionsList({ sessions, selectedId, onSelect }: ActiveSes
                   </Badge>
                 </div>
               </div>
-              <code className="text-xs text-muted-foreground">{session.session_id.slice(0, 8)}</code>
+              <div className="flex items-center justify-between">
+                <code className="text-xs text-muted-foreground">{session.session_id.slice(0, 8)}</code>
+                <Link
+                  to={`/sessions/${session.project_folder}/${session.session_id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline"
+                  title="Open session transcript & insights"
+                >
+                  Open <ArrowUpRight className="h-3 w-3" />
+                </Link>
+              </div>
               <div className="space-y-1">
                 <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">Context</span>
