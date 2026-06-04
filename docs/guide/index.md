@@ -29,11 +29,11 @@ Claude Deck covers all aspects of Claude Code configuration:
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Python 3.11+ with FastAPI |
+| Backend | Rust with axum + Tokio |
 | Frontend | React 19 + TypeScript + Vite 7 |
 | UI | shadcn/ui + Tailwind CSS |
 | Charts | Recharts |
-| Database | SQLite (async via SQLAlchemy + aiosqlite) |
+| Database | SQLite (via sqlx) |
 
 ## Next Steps
 

@@ -19,7 +19,7 @@ export default defineConfig({
       { text: 'API Reference', link: '/api/' },
       {
         text: 'v1.2.0',
-        link: 'https://github.com/adrirubio/claude-deck/blob/master/CHANGELOG.md',
+        link: 'https://github.com/moonexpr/claude-deck/blob/main/CHANGELOG.md',
       },
     ],
 
@@ -90,7 +90,7 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/adrirubio/claude-deck' },
+      { icon: 'github', link: 'https://github.com/moonexpr/claude-deck' },
     ],
 
     search: {
@@ -98,7 +98,7 @@ export default defineConfig({
     },
 
     editLink: {
-      pattern: 'https://github.com/adrirubio/claude-deck/edit/master/docs/:path',
+      pattern: 'https://github.com/moonexpr/claude-deck/edit/main/docs/:path',
       text: 'Edit this page on GitHub',
     },
 

@@ -11,7 +11,7 @@ git clone https://github.com/<your-username>/claude-deck.git
 cd claude-deck
 ```
 
-2. Run the install script (requires Python 3.11+ and Node.js 18+):
+2. Run the install script (requires Rust 1.85+ and Node.js 18+):
 
 ```bash
 ./scripts/install.sh
@@ -30,25 +30,25 @@ Backend runs at `http://localhost:8000`, frontend at `http://localhost:5173`.
 ### Frontend
 
 - TypeScript strict mode (`noUnusedLocals`, `noUnusedParameters`)
-- ESLint — run `cd frontend && npm run lint` before submitting
+- ESLint — run `cd app/web && npm run lint` before submitting
 - Tailwind CSS + shadcn/ui for styling
 - Path alias `@/*` maps to `./src/*`
 
 ### Backend
 
-- Python with type hints throughout
-- Async/await patterns
-- Pydantic models for request/response validation
+- Rust 2024 edition — run `cargo fmt` and `cargo clippy` before submitting
+- Async/await on Tokio; axum handlers return typed responses
+- serde for request/response types
 
 ## Project Structure
 
-Each feature lives in its own module under `frontend/src/features/`. When adding a new feature:
+Each feature lives in its own module under `app/web/src/features/`. When adding a new feature:
 
-1. Create a directory in `frontend/src/features/<name>/`
+1. Create a directory in `app/web/src/features/<name>/`
 2. Add a page component, sub-components, API functions, and types
-3. Register the route in `frontend/src/App.tsx`
-4. Add the backend route module in `backend/app/api/v1/`
-5. Register the router in `backend/app/api/v1/router.py`
+3. Register the route in `app/web/src/App.tsx`
+4. Add the backend route module in `app/server/core/src/api/v1/`
+5. Wire it into the router in `app/server/core/src/api/v1/mod.rs`
 
 ## Submitting Changes
 
@@ -59,7 +59,7 @@ Each feature lives in its own module under `frontend/src/features/`. When adding
 
 ## Reporting Issues
 
-Found a bug or have a feature idea? [Open an issue](https://github.com/adrirubio/claude-deck/issues) and include:
+Found a bug or have a feature idea? [Open an issue](https://github.com/moonexpr/claude-deck/issues) and include:
 
 - What you expected to happen
 - What actually happened

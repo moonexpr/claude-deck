@@ -11,7 +11,7 @@ hero:
       link: /guide/
     - theme: alt
       text: View on GitHub
-      link: https://github.com/adrirubio/claude-deck
+      link: https://github.com/moonexpr/claude-deck
 
 features:
   - icon: 🌉

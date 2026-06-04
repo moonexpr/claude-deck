@@ -1,26 +1,27 @@
 # Installation
 
-## Docker (Recommended)
+## Docker
 
-The fastest way to run Claude Deck:
+::: warning
+The Docker image is being reworked for the Rust backend
+([#2](https://github.com/moonexpr/claude-deck/issues/2)). Until that lands, use
+the manual installation below.
+:::
 
 ```bash
-git clone https://github.com/adrirubio/claude-deck.git
+git clone https://github.com/moonexpr/claude-deck.git
 cd claude-deck
 docker compose up
 ```
 
-This builds and starts Claude Deck at `http://localhost:8000`, mounting your `~/.claude` and `~/.claude.json` configuration files.
-
-::: tip
-The container mounts your home directory's Claude Code configuration. The container runs as root to access these files; adjust permissions if running as a non-root user.
-:::
+This is intended to build and start Claude Deck at `http://localhost:8000`,
+mounting your `~/.claude` and `~/.claude.json` configuration files.
 
 ## Manual Installation
 
 ### Prerequisites
 
-- **Python 3.11+**
+- **Rust 1.85+** (edition 2024) via [rustup](https://rustup.rs/)
 - **Node.js 18+**
 
 ### Steps
@@ -28,7 +29,7 @@ The container mounts your home directory's Claude Code configuration. The contai
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/adrirubio/claude-deck.git
+git clone https://github.com/moonexpr/claude-deck.git
 cd claude-deck
 ```
 
@@ -39,24 +40,26 @@ cd claude-deck
 ```
 
 This script:
-- Creates a Python virtual environment in `backend/venv/`
-- Installs Python dependencies from `backend/requirements.txt`
-- Installs Node.js dependencies in `frontend/`
-- Creates required directories
+- Compiles the Rust server crates (`server-core` + `server-bin`) under `app/server/`
+- Installs Node.js dependencies in `app/web/`
+- The SQLite database is created on first run (no init step)
 
 3. Verify the installation:
 
 ```bash
 # Check backend
-cd backend && source venv/bin/activate && python -c "import fastapi; print('Backend OK')"
+cd app/server && cargo build -p server-bin
 
 # Check frontend
-cd frontend && npm run build
+cd app/web && npm run build
 ```
 
 ## Configuration
 
-Claude Deck requires no configuration files — all settings have sensible defaults defined in `backend/app/config.py`. The SQLite database is created automatically on first run at `backend/claude_registry.db`.
+Claude Deck requires no configuration files — all settings have sensible defaults.
+The SQLite database (`claude_registry.db`) is created automatically on first run.
+By default the server listens on a unix socket; pass `--tcp` to `scripts/dev.sh`
+for TCP on `http://localhost:8000`.
 
 ## What Gets Read
 

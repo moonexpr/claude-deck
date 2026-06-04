@@ -46,10 +46,9 @@ Error responses return JSON with a `detail` field:
 
 ## API Documentation
 
-FastAPI generates interactive API docs at:
-
-- **Swagger UI:** `http://localhost:8000/docs`
-- **ReDoc:** `http://localhost:8000/redoc`
+The REST API is served under `/api/v1/`. The route modules are documented on the
+pages below; each corresponds to a handler module in
+`app/server/core/src/api/v1/`. A health probe is available at `/health`.
 
 ## Route Modules
 

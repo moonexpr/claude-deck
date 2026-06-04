@@ -36,10 +36,10 @@ All notable changes to Claude Deck are documented here. The format follows [Keep
 
 ### Technical
 
-- FastAPI backend with async SQLAlchemy + SQLite
+- Rust backend (axum + Tokio + sqlx) serving SQLite
 - React frontend with TypeScript, Vite, and shadcn/ui
 - RESTful API at `/api/v1/`
 
 ---
 
-See the full changelog on [GitHub](https://github.com/adrirubio/claude-deck/blob/master/CHANGELOG.md).
+See the full changelog on [GitHub](https://github.com/moonexpr/claude-deck/blob/main/CHANGELOG.md).
