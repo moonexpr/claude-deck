@@ -7,6 +7,7 @@ pub mod commands;
 pub mod config;
 pub mod context;
 pub mod hooks;
+pub mod insights;
 pub mod mcp;
 pub mod memory;
 pub mod output_styles;
@@ -72,6 +73,7 @@ pub fn router(
     Router::new()
         .route("/status", get(status_handler))
         .nest("/sessions", sessions::router())
+        .nest("/insights", insights::router())
         .nest("/presence", presence::router())
         .nest("/projects", projects::router())
         .nest("/config", config::router())
