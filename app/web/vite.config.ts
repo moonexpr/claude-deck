@@ -18,11 +18,14 @@ const serverUrl = process.env.SERVER_URL ?? "http://localhost:8000";
 
 const apiProxy: ProxyOptions = socketPath
   ? {
+      // node-http-proxy honours `target.socketPath` at runtime, but Vite's
+      // ProxyOptions['target'] type (http-proxy's ProxyTargetUrl) doesn't
+      // expose it — cast through unknown to keep the runtime behaviour.
       target: {
         socketPath,
         host: "localhost",
         protocol: "http:",
-      },
+      } as unknown as ProxyOptions["target"],
       changeOrigin: false,
       ws: true,
     }
