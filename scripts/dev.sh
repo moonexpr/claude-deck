@@ -2,40 +2,85 @@
 # Development server startup script — starts server-bin (axum) and the Vite
 # dev server for the app/ tree.
 #
+# By default the server binds to a Unix socket and Vite proxies /api to it,
+# so the whole stack can sit behind an nginx upstream for local networking.
+#
 # Usage:
-#   ./scripts/dev.sh                 # bind to 127.0.0.1
-#   ./scripts/dev.sh --host 0.0.0.0  # bind to all interfaces (LAN/tailnet)
+#   ./scripts/dev.sh                            # unix socket at /tmp/claude-deck.sock
+#   ./scripts/dev.sh --socket /path/to.sock     # unix socket at a custom path
+#   ./scripts/dev.sh --tcp                      # legacy TCP on localhost:8000
+#   ./scripts/dev.sh --tcp --host 0.0.0.0       # TCP, bound to all interfaces
+#   ./scripts/dev.sh --web-host 0.0.0.0         # expose Vite on LAN; server still on socket
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-HOST=""
+MODE="socket"            # socket | tcp
+SOCKET_PATH_ARG=""
+TCP_HOST=""
+WEB_HOST=""
 
 usage() {
     cat <<EOF
-Usage: $0 [--host <host>]
+Usage: $0 [--socket <path>] [--tcp] [--host <host>] [--web-host <host>]
 
 Options:
-  --host <host>   Bind both server and web dev to the given host (e.g. 0.0.0.0)
-  -h, --help      Show this help message
+  --socket <path>   Bind server-bin to the given unix socket path
+                    (default: \$SOCKET_PATH or /tmp/claude-deck.sock)
+  --tcp             Use TCP instead of a unix socket (legacy mode)
+  --host <host>     With --tcp: bind server-bin to this host (e.g. 0.0.0.0)
+  --web-host <host> Bind Vite dev server to this host (e.g. 0.0.0.0)
+  -h, --help        Show this help message
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --socket)
+            if [ -z "${2:-}" ]; then
+                echo "Error: --socket requires a value."
+                usage
+                exit 1
+            fi
+            MODE="socket"
+            SOCKET_PATH_ARG="$2"
+            shift 2
+            ;;
+        --socket=*)
+            MODE="socket"
+            SOCKET_PATH_ARG="${1#*=}"
+            shift
+            ;;
+        --tcp)
+            MODE="tcp"
+            shift
+            ;;
         --host)
             if [ -z "${2:-}" ]; then
                 echo "Error: --host requires a value."
                 usage
                 exit 1
             fi
-            HOST="$2"
+            TCP_HOST="$2"
             shift 2
             ;;
         --host=*)
-            HOST="${1#*=}"
+            TCP_HOST="${1#*=}"
+            shift
+            ;;
+        --web-host)
+            if [ -z "${2:-}" ]; then
+                echo "Error: --web-host requires a value."
+                usage
+                exit 1
+            fi
+            WEB_HOST="$2"
+            shift 2
+            ;;
+        --web-host=*)
+            WEB_HOST="${1#*=}"
             shift
             ;;
         -h|--help)
@@ -98,31 +143,44 @@ trap 'cleanup; exit 130' SIGINT
 trap 'cleanup; exit 143' SIGTERM
 trap cleanup EXIT
 
-SERVER_HOST_ENV=()
+SERVER_ENV=()
+WEB_ENV=()
 WEB_HOST_ARGS=()
-if [ -n "$HOST" ]; then
-    SERVER_HOST_ENV=(HOST="$HOST")
-    WEB_HOST_ARGS=(-- --host "$HOST")
-    echo "Binding servers to host: $HOST"
+
+if [ "$MODE" = "socket" ]; then
+    SOCKET_PATH="${SOCKET_PATH_ARG:-${SOCKET_PATH:-/tmp/claude-deck.sock}}"
+    SERVER_ENV=(SOCKET_PATH="$SOCKET_PATH")
+    WEB_ENV=(SOCKET_PATH="$SOCKET_PATH")
+    SERVER_LISTEN_DESC="unix:${SOCKET_PATH}"
+else
+    TCP_HOST="${TCP_HOST:-127.0.0.1}"
+    SERVER_ENV=(HOST="$TCP_HOST" PORT=8000)
+    WEB_ENV=(SERVER_URL="http://${TCP_HOST}:8000")
+    SERVER_LISTEN_DESC="http://${TCP_HOST}:8000"
 fi
 
+if [ -n "$WEB_HOST" ]; then
+    WEB_HOST_ARGS=(-- --host "$WEB_HOST")
+    echo "Vite bound to host: $WEB_HOST"
+fi
+DISPLAY_WEB_HOST="${WEB_HOST:-localhost}"
+
 # Start server-bin
-DISPLAY_HOST="${HOST:-localhost}"
-echo "Starting server-bin on http://${DISPLAY_HOST}:8000..."
+echo "Starting server-bin on ${SERVER_LISTEN_DESC}..."
 cd "$PROJECT_ROOT/app/server"
-env "${SERVER_HOST_ENV[@]}" PORT=8000 cargo run -p server-bin &
+env "${SERVER_ENV[@]}" cargo run -p server-bin &
 SERVER_PID=$!
 
 # Start Vite
-echo "Starting web dev server on http://${DISPLAY_HOST}:5173..."
+echo "Starting web dev server on http://${DISPLAY_WEB_HOST}:5173..."
 cd "$PROJECT_ROOT/app/web"
-npm run dev "${WEB_HOST_ARGS[@]}" &
+env "${WEB_ENV[@]}" npm run dev "${WEB_HOST_ARGS[@]}" &
 WEB_PID=$!
 
 echo ""
 echo "Development servers started!"
-echo "  - Server: http://${DISPLAY_HOST}:8000 (REST API under /api/v1, health at /health)"
-echo "  - Web:    http://${DISPLAY_HOST}:5173"
+echo "  - Server: ${SERVER_LISTEN_DESC} (REST API under /api/v1, health at /health)"
+echo "  - Web:    http://${DISPLAY_WEB_HOST}:5173"
 echo ""
 echo "Press Ctrl+C to stop all servers."
 
