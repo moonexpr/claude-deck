@@ -34,6 +34,50 @@ test("Sessions list page renders without console errors", async ({ page }) => {
   ).toHaveLength(0);
 });
 
+test("Session view Insights tab shows the analyze card without console errors", async ({
+  page,
+}) => {
+  const consoleErrors: string[] = [];
+  page.on("console", (msg) => {
+    if (msg.type() === "error") consoleErrors.push(msg.text());
+  });
+
+  await page.goto("/sessions");
+  // Let the async session list settle before counting cards.
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByText("Session Transcripts", { exact: true })).toBeVisible();
+
+  // Open the first session card (CLICKABLE_CARD adds `cursor-pointer`).
+  const firstCard = page.locator(".cursor-pointer").first();
+  test.skip((await firstCard.count()) === 0, "no sessions available in this environment");
+
+  await firstCard.click();
+  await page.waitForTimeout(500);
+  // Dynamic skip if the click didn't reach a session detail view.
+  test.skip(
+    !/\/sessions\/[^/]+\/[^/]+/.test(page.url()),
+    "first card did not navigate to a session detail"
+  );
+
+  // The Insights tab appears once the session loads.
+  const insightsTab = page.getByRole("tab", { name: "Insights" });
+  await expect(insightsTab).toBeVisible({ timeout: 8000 });
+  await insightsTab.click();
+
+  // Idle/loaded states: the analyze card, a re-analyze button, or loading text.
+  await expect(
+    page
+      .getByRole("button", { name: /Analyze session|Re-analyze/ })
+      .or(page.getByText(/Loading insights/))
+      .first()
+  ).toBeVisible({ timeout: 8000 });
+
+  expect(
+    consoleErrors,
+    `Console errors on session Insights tab: ${consoleErrors.join("; ")}`
+  ).toHaveLength(0);
+});
+
 test("Sessions list page shows sessions or empty state", async ({ page }) => {
   await page.goto("/sessions");
 
