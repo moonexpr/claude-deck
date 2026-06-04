@@ -5,10 +5,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
-import { ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
+import { ChevronLeft, ChevronRight, ArrowLeft, ChevronsDownUp, ChevronsUpDown } from 'lucide-react'
 import { apiClient } from '@/lib/api'
 import { useSessionsApi } from './useSessionsApi'
+import { useUsageApi } from '@/features/usage/useUsageApi'
 import { ConversationList } from './ConversationList'
+import { TranscriptContext, type ExpandSignal } from './TranscriptContext'
 import type { SessionDetail } from '@/types/sessions'
 import type { ContextAnalysis, ContextAnalysisResponse } from '@/types/context'
 
@@ -27,6 +31,36 @@ export function SessionViewPage() {
   const [contextAnalysis, setContextAnalysis] = useState<ContextAnalysis | null>(null)
   const [contextLoading, setContextLoading] = useState(false)
   const [contextLoaded, setContextLoaded] = useState(false)
+
+  // Transcript display state (A3/A7).
+  const [showThinking, setShowThinking] = useState<boolean>(
+    () => localStorage.getItem('cd:showThinking') === '1'
+  )
+  const [expandSignal, setExpandSignal] = useState<ExpandSignal>({ expand: false, nonce: 0 })
+  const toggleThinking = (v: boolean) => {
+    setShowThinking(v)
+    localStorage.setItem('cd:showThinking', v ? '1' : '0')
+  }
+  const broadcastExpand = (expand: boolean) =>
+    setExpandSignal((s) => ({ expand, nonce: s.nonce + 1 }))
+
+  // Per-session cost (B1) — reuse the existing usage pricing rather than recompute.
+  const [sessionCost, setSessionCost] = useState<number | null>(null)
+  const { getSessions } = useUsageApi()
+  useEffect(() => {
+    let cancelled = false
+    getSessions()
+      .then((res) => {
+        const match = res.data.find((s) => s.session_id === sessionId)
+        if (!cancelled) setSessionCost(match ? match.total_cost : null)
+      })
+      .catch(() => {
+        /* cost is best-effort */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [getSessions, sessionId])
 
   const loadSession = useCallback(async (page: number) => {
     if (!projectFolder || !sessionId) return
@@ -164,6 +198,12 @@ export function SessionViewPage() {
                     </div>
                   </div>
                 )}
+                {sessionCost != null && (
+                  <div className="flex flex-col">
+                    <span className="text-muted-foreground">Cost</span>
+                    <span className="text-2xl font-bold">${sessionCost.toFixed(2)}</span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -176,7 +216,27 @@ export function SessionViewPage() {
             </TabsList>
 
             <TabsContent value="conversation" className="space-y-4">
-              <ConversationList conversations={session.conversations} />
+              {/* Transcript controls (A3/A7) */}
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Switch id="show-thinking" checked={showThinking} onCheckedChange={toggleThinking} />
+                  <Label htmlFor="show-thinking" className="text-sm">Show thinking</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => broadcastExpand(true)}>
+                    <ChevronsUpDown className="h-4 w-4 mr-1" />
+                    Expand all
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => broadcastExpand(false)}>
+                    <ChevronsDownUp className="h-4 w-4 mr-1" />
+                    Collapse all
+                  </Button>
+                </div>
+              </div>
+
+              <TranscriptContext.Provider value={{ showThinking, expandSignal }}>
+                <ConversationList conversations={session.conversations} />
+              </TranscriptContext.Provider>
 
               {/* Pagination */}
               {totalPages > 1 && (
