@@ -75,7 +75,51 @@ async fn main() -> anyhow::Result<()> {
     let cwd_fallback: PathBuf =
         std::env::current_dir().context("could not determine current working directory")?;
 
-    // ---- Bind address -------------------------------------------------------
+    // ---- Build router (binding decided next) --------------------------------
+
+    let config = ServerConfig {
+        db_url: db_url.clone(),
+        projects_dir: projects_dir.clone(),
+        frontend_dist_path,
+        presence_public_url,
+        key_source,
+        anthropic_base_url,
+        enable_external_tools,
+        cwd_fallback,
+    };
+
+    let router = app(config).await.context("failed to build app")?;
+
+    // ---- Bind: Unix socket if SOCKET_PATH is set, else TCP HOST:PORT --------
+
+    if let Ok(socket_path) = std::env::var("SOCKET_PATH") {
+        use std::os::unix::fs::PermissionsExt;
+        let path = PathBuf::from(&socket_path);
+
+        // Remove stale socket from a prior unclean shutdown.
+        let _ = std::fs::remove_file(&path);
+
+        tracing::info!(
+            db_url = %db_url,
+            projects_dir = %projects_dir.display(),
+            socket = %path.display(),
+            "starting server"
+        );
+
+        let listener = tokio::net::UnixListener::bind(&path)
+            .with_context(|| format!("failed to bind unix socket {}", path.display()))?;
+
+        // 0660 so nginx running as the same user/group can connect; world cannot.
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o660));
+
+        tracing::info!(socket = %path.display(), "listening (unix)");
+
+        axum::serve(listener, router)
+            .await
+            .context("server error")?;
+
+        return Ok(());
+    }
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_owned());
     let port: u16 = std::env::var("PORT")
@@ -86,27 +130,12 @@ async fn main() -> anyhow::Result<()> {
         .parse()
         .context("invalid HOST/PORT")?;
 
-    // ---- Build and serve ----------------------------------------------------
-
     tracing::info!(
         db_url = %db_url,
         projects_dir = %projects_dir.display(),
         addr = %addr,
         "starting server"
     );
-
-    let config = ServerConfig {
-        db_url,
-        projects_dir,
-        frontend_dist_path,
-        presence_public_url,
-        key_source,
-        anthropic_base_url,
-        enable_external_tools,
-        cwd_fallback,
-    };
-
-    let router = app(config).await.context("failed to build app")?;
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
