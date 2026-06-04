@@ -18,12 +18,10 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use sqlx::{Row, SqlitePool};
 
-use crate::services::ai::key_provider::AuthCredential;
-use crate::services::ai::{Message, MessageRole, anthropic};
+use crate::services::headless_claude;
 use crate::services::session_service::SessionService;
 
-const ANALYZER_VERSION: &str = "m1.1";
-const TOOL_NAME: &str = "record_session_insight";
+const ANALYZER_VERSION: &str = "m2.0-headless";
 
 // ---------------------------------------------------------------------------
 // Response shape (also the cache-reload shape)
@@ -172,45 +170,11 @@ fn gate(locator: &str, quote: &str, entries: &HashMap<String, String>) -> Gate {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Tool schema (forced tool-use)
-// ---------------------------------------------------------------------------
-
-fn insight_tool_schema() -> serde_json::Value {
-    let grounded_item = serde_json::json!({
-        "type": "object",
-        "required": ["text", "source_ref", "quote"],
-        "properties": {
-            "text": { "type": "string" },
-            "source_ref": { "type": "string", "description": "the [entry <locator>] tag you drew this from" },
-            "quote": { "type": "string", "description": "an EXACT verbatim span copied from that entry" }
-        }
-    });
-    serde_json::json!({
-        "type": "object",
-        "required": ["summary", "judgment_calls", "follow_ups"],
-        "properties": {
-            "summary": { "type": "string" },
-            "decisions": { "type": "array", "items": grounded_item },
-            "judgment_calls": { "type": "array", "items": {
-                "type": "object",
-                "required": ["summary", "source_ref", "quote"],
-                "properties": {
-                    "summary": { "type": "string" },
-                    "options": { "type": "array", "items": { "type": "string" } },
-                    "chosen": { "type": "string" },
-                    "rationale": { "type": "string" },
-                    "source_ref": { "type": "string" },
-                    "quote": { "type": "string" }
-                }
-            }},
-            "errors_hit": { "type": "array", "items": grounded_item },
-            "follow_ups": { "type": "array", "items": { "type": "string" } }
-        }
-    })
-}
-
-const SYSTEM_PROMPT: &str = "You analyze a Claude Code session transcript and record a structured insight via the record_session_insight tool. \
+const SYSTEM_PROMPT: &str = "You analyze a Claude Code session transcript and emit one structured insight as JSON. \
+Respond with ONLY a JSON object (no prose, no markdown fence) of EXACTLY this shape: \
+{\"summary\": string, \"decisions\": [{\"text\": string, \"source_ref\": string, \"quote\": string}], \
+\"judgment_calls\": [{\"summary\": string, \"options\": [string], \"chosen\": string, \"rationale\": string, \"source_ref\": string, \"quote\": string}], \
+\"errors_hit\": [{\"text\": string, \"source_ref\": string, \"quote\": string}], \"follow_ups\": [string]}. \
 Rules: (1) For every decision, judgment_call, and error, set source_ref to the [entry <locator>] tag you drew it from, and set quote to an EXACT verbatim span copied from that entry's text. \
 (2) Emit nothing you cannot quote. (3) summary and follow_ups are session-level and do not cite. \
 A judgment_call is a point where a choice was made between alternatives.";
@@ -225,8 +189,7 @@ A judgment_call is a point where a choice was made between alternatives.";
 pub async fn analyze_session(
     pool: &SqlitePool,
     session_service: &SessionService,
-    anthropic_base_url: &str,
-    credential: AuthCredential,
+    claude_bin: &str,
     model: Option<String>,
     project: &str,
     session: &str,
@@ -263,16 +226,8 @@ pub async fn analyze_session(
     .await?
     .last_insert_rowid();
 
-    match run_inference_and_persist(
-        pool,
-        anthropic_base_url,
-        credential,
-        &model_str,
-        &target_ref,
-        run_id,
-        &entries,
-    )
-    .await
+    match run_inference_and_persist(pool, claude_bin, &model_str, &target_ref, run_id, &entries)
+        .await
     {
         Ok(()) => load_session_insight(pool, run_id).await,
         Err(e) => {
@@ -286,11 +241,9 @@ pub async fn analyze_session(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn run_inference_and_persist(
     pool: &SqlitePool,
-    anthropic_base_url: &str,
-    credential: AuthCredential,
+    claude_bin: &str,
     model_str: &str,
     target_ref: &str,
     run_id: i64,
@@ -299,21 +252,11 @@ async fn run_inference_and_persist(
     let lookup: HashMap<String, String> =
         entries.iter().map(|e| (e.locator.clone(), e.text.clone())).collect();
 
-    let messages = vec![Message {
-        role: MessageRole::User,
-        content: render_prompt(entries),
-    }];
-
-    let (input, usage) = anthropic::complete_structured(
-        reqwest::Client::new(),
-        anthropic_base_url.to_string(),
-        credential,
-        Some(model_str.to_string()),
-        Some(SYSTEM_PROMPT.to_string()),
-        messages,
-        TOOL_NAME,
-        "Record the structured insight for this session.",
-        insight_tool_schema(),
+    let (input, usage) = headless_claude::run_structured(
+        claude_bin,
+        Some(model_str),
+        SYSTEM_PROMPT,
+        &render_prompt(entries),
     )
     .await?;
 

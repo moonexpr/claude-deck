@@ -60,20 +60,14 @@ async fn analyze(
     State(state): State<ApiState>,
     Path((project, session)): Path<(String, String)>,
 ) -> Response {
-    let provider = match &state.key_provider {
-        Some(p) => p,
-        None => return unavailable(serde_json::Value::Null),
-    };
-    let cred = match provider.current_credential().await {
-        Some(c) => c,
-        None => return unavailable(serde_json::Value::String(provider.label().to_string())),
-    };
+    // Inference runs through headless Claude Code (subscription auth, no API
+    // key). Override the binary via CLAUDE_BIN; default `claude` on PATH.
+    let claude_bin = std::env::var("CLAUDE_BIN").unwrap_or_else(|_| "claude".to_string());
 
     match insight_service::analyze_session(
         &state.pool,
         &state.session_service,
-        &state.anthropic_base_url,
-        cred,
+        &claude_bin,
         None,
         &project,
         &session,
@@ -81,26 +75,14 @@ async fn analyze(
     .await
     {
         Ok(insight) => Json(insight).into_response(),
+        // Surface the headless-claude failure detail so the card can show it
+        // (e.g. "claude error: Credit balance is too low", or not-on-PATH).
         Err(e) => (
-            StatusCode::BAD_GATEWAY,
+            StatusCode::SERVICE_UNAVAILABLE,
             Json(serde_json::json!({ "status": "error", "detail": e.to_string() })),
         )
             .into_response(),
     }
-}
-
-/// 503 with the same `{status:"unavailable", key_source}` shape the chat banner
-/// (PR #6) parses, so the InsightCard can reuse that copy.
-fn unavailable(key_source: serde_json::Value) -> Response {
-    (
-        StatusCode::SERVICE_UNAVAILABLE,
-        Json(serde_json::json!({
-            "status": "unavailable",
-            "detail": "No usable Anthropic credential is configured.",
-            "key_source": key_source,
-        })),
-    )
-        .into_response()
 }
 
 #[derive(Deserialize)]
