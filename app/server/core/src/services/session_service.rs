@@ -403,7 +403,11 @@ impl SessionService {
         project_folder: &str,
         page: usize,
     ) -> SessionDetailResponse {
-        let conversations = Self::parse_session_to_conversations(entries);
+        let mut conversations = Self::parse_session_to_conversations(entries);
+        // Newest turn first: page 1 shows the most recent conversation, the
+        // last paginator page shows the oldest. Order within a turn (the user
+        // prompt and its assistant replies) stays chronological.
+        conversations.reverse();
 
         let total_pages = conversations.len().div_ceil(PROMPTS_PER_PAGE);
         let page = page.max(1);
