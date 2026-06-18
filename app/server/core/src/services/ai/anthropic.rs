@@ -277,3 +277,145 @@ pub async fn complete_messages(
 
     Ok((text, usage))
 }
+
+// ---------------------------------------------------------------------------
+// Structured-output path (forced tool-use) — used by the Insight Platform.
+// ---------------------------------------------------------------------------
+
+/// Extract the forced-tool-use `input` (schema-valid object) + usage from a
+/// non-streaming Anthropic Messages response. Pure so it is unit-testable
+/// without a network round-trip.
+fn parse_tool_use(
+    json: &serde_json::Value,
+    tool_name: &str,
+) -> anyhow::Result<(serde_json::Value, Usage)> {
+    let content = json
+        .get("content")
+        .and_then(|c| c.as_array())
+        .ok_or_else(|| anyhow!("response missing content array"))?;
+    let input = content
+        .iter()
+        .find(|b| {
+            b.get("type").and_then(|t| t.as_str()) == Some("tool_use")
+                && b.get("name").and_then(|n| n.as_str()) == Some(tool_name)
+        })
+        .and_then(|b| b.get("input").cloned())
+        .ok_or_else(|| anyhow!("no tool_use block named '{tool_name}' in response"))?;
+    let usage = json
+        .get("usage")
+        .map(|u| Usage {
+            input_tokens: u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+            output_tokens: u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+        })
+        .unwrap_or(Usage { input_tokens: 0, output_tokens: 0 });
+    Ok((input, usage))
+}
+
+/// Call Anthropic with a single tool and `tool_choice` forcing it, returning
+/// the tool's `input` (guaranteed schema-valid by the API) plus token usage.
+///
+/// `system` is sent as the top-level Anthropic `system` field; `messages`
+/// should carry only user/assistant turns. Schema-validity is guaranteed by
+/// the API — *groundedness is not*, so callers must still run the provenance
+/// gate over the returned object (Plan 0004a §M0).
+#[allow(clippy::too_many_arguments)]
+pub async fn complete_structured(
+    client: Client,
+    base_url: String,
+    auth: AuthCredential,
+    model: Option<String>,
+    system: Option<String>,
+    messages: Vec<Message>,
+    tool_name: &str,
+    tool_description: &str,
+    input_schema: serde_json::Value,
+) -> anyhow::Result<(serde_json::Value, Usage)> {
+    let model_str = model.as_deref().unwrap_or(DEFAULT_MODEL);
+    let url = format!("{}/v1/messages", base_url.trim_end_matches('/'));
+
+    let mut body = serde_json::json!({
+        "model": model_str,
+        "max_tokens": DEFAULT_MAX_TOKENS,
+        "stream": false,
+        "messages": messages,
+        "tools": [{
+            "name": tool_name,
+            "description": tool_description,
+            "input_schema": input_schema,
+        }],
+        "tool_choice": { "type": "tool", "name": tool_name },
+    });
+    if let Some(sys) = system {
+        body["system"] = serde_json::Value::String(sys);
+    }
+
+    let req = client
+        .post(&url)
+        .header("anthropic-version", ANTHROPIC_VERSION)
+        .header("content-type", "application/json")
+        .json(&body);
+    let resp = apply_auth(req, &auth)
+        .send()
+        .await
+        .context("failed to connect to Anthropic API")?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let code = status.as_u16();
+        let detail = resp
+            .text()
+            .await
+            .unwrap_or_else(|_| "upstream error".to_string());
+        return Err(anyhow!("upstream_error|{}|{}", code, detail));
+    }
+
+    let json: serde_json::Value = resp
+        .json()
+        .await
+        .context("failed to parse Anthropic response JSON")?;
+    parse_tool_use(&json, tool_name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_tool_use_extracts_input_and_usage() {
+        let canned = serde_json::json!({
+            "content": [
+                { "type": "text", "text": "ignored preamble" },
+                { "type": "tool_use", "name": "record_session_insight",
+                  "input": { "summary": "did X", "judgment_calls": [], "follow_ups": [] } }
+            ],
+            "usage": { "input_tokens": 1200, "output_tokens": 64 }
+        });
+        let (input, usage) = parse_tool_use(&canned, "record_session_insight").unwrap();
+        assert_eq!(input["summary"], "did X");
+        assert!(input["judgment_calls"].is_array());
+        assert_eq!(usage.input_tokens, 1200);
+        assert_eq!(usage.output_tokens, 64);
+    }
+
+    #[test]
+    fn parse_tool_use_errors_when_tool_absent() {
+        let canned = serde_json::json!({
+            "content": [{ "type": "text", "text": "no tool here" }],
+            "usage": { "input_tokens": 1, "output_tokens": 1 }
+        });
+        assert!(parse_tool_use(&canned, "record_session_insight").is_err());
+    }
+
+    #[test]
+    fn parse_tool_use_usage_defaults_to_zero() {
+        let canned = serde_json::json!({
+            "content": [
+                { "type": "tool_use", "name": "t", "input": { "ok": true } }
+            ]
+        });
+        let (input, usage) = parse_tool_use(&canned, "t").unwrap();
+        assert_eq!(input["ok"], true);
+        assert_eq!(usage.input_tokens, 0);
+        assert_eq!(usage.output_tokens, 0);
+    }
+}

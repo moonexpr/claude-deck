@@ -1,17 +1,37 @@
 use crate::api::v1::ApiState;
-use crate::services::session_service::SessionDetailResponse;
+use crate::services::session_service::{
+    SessionDetailResponse, SessionListResponse, SessionProjectListResponse, SessionStatsResponse,
+};
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
+    http::StatusCode,
     routing::get,
 };
 use serde::Deserialize;
-use serde_json::Value;
+
+/// Default page size for the session list when the client doesn't pass `limit`.
+const DEFAULT_LIST_LIMIT: usize = 100;
 
 #[derive(Debug, Deserialize)]
 struct DetailQuery {
     #[serde(default)]
     page: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ListQuery {
+    #[serde(default)]
+    project_folder: Option<String>,
+    #[serde(default)]
+    limit: Option<usize>,
+    // sort_by / sort_order accepted for forward-compat; list is modified-desc.
+    #[serde(default)]
+    #[allow(dead_code)]
+    sort_by: Option<String>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    sort_order: Option<String>,
 }
 
 pub fn router() -> Router<ApiState> {
@@ -22,22 +42,39 @@ pub fn router() -> Router<ApiState> {
         .route("/{project}/{session}", get(get_session_detail))
 }
 
-async fn list_sessions() -> Json<Value> {
-    Json(serde_json::json!({"sessions": [], "total": 0}))
+async fn list_sessions(
+    State(state): State<ApiState>,
+    Query(query): Query<ListQuery>,
+) -> Result<Json<SessionListResponse>, (StatusCode, String)> {
+    let limit = query.limit.unwrap_or(DEFAULT_LIST_LIMIT).max(1);
+    state
+        .session_service
+        .list_sessions(query.project_folder.as_deref(), limit)
+        .await
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
-async fn get_session_projects() -> Json<Value> {
-    Json(serde_json::json!({"projects": [], "total_sessions": 0}))
+async fn get_session_projects(
+    State(state): State<ApiState>,
+) -> Result<Json<SessionProjectListResponse>, (StatusCode, String)> {
+    state
+        .session_service
+        .list_projects()
+        .await
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
-async fn get_session_stats() -> Json<Value> {
-    Json(serde_json::json!({
-        "total_sessions": 0,
-        "sessions_today": 0,
-        "sessions_this_week": 0,
-        "most_active_project": null,
-        "total_messages": 0
-    }))
+async fn get_session_stats(
+    State(state): State<ApiState>,
+) -> Result<Json<SessionStatsResponse>, (StatusCode, String)> {
+    state
+        .session_service
+        .dashboard_stats()
+        .await
+        .map(Json)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
 async fn get_session_detail(

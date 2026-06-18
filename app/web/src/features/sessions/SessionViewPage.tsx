@@ -12,6 +12,7 @@ import { apiClient } from '@/lib/api'
 import { useSessionsApi } from './useSessionsApi'
 import { useUsageApi } from '@/features/usage/useUsageApi'
 import { ConversationList } from './ConversationList'
+import { InsightCard } from './InsightCard'
 import { TranscriptContext, type ExpandSignal } from './TranscriptContext'
 import type { SessionDetail } from '@/types/sessions'
 import type { ContextAnalysis, ContextAnalysisResponse } from '@/types/context'
@@ -212,6 +213,7 @@ export function SessionViewPage() {
           <Tabs defaultValue="conversation" onValueChange={handleTabChange}>
             <TabsList>
               <TabsTrigger value="conversation">Conversation</TabsTrigger>
+              <TabsTrigger value="insights">Insights</TabsTrigger>
               <TabsTrigger value="context">Context</TabsTrigger>
             </TabsList>
 
@@ -266,6 +268,10 @@ export function SessionViewPage() {
                   </CardContent>
                 </Card>
               )}
+            </TabsContent>
+
+            <TabsContent value="insights" className="space-y-4">
+              <InsightCard projectFolder={projectFolder} sessionId={sessionId} />
             </TabsContent>
 
             <TabsContent value="context" className="space-y-4">

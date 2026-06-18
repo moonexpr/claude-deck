@@ -87,6 +87,48 @@ pub struct SessionDetailResponse {
     pub prompts_per_page: usize,
 }
 
+/// A session list-row summary. Mirrors the frontend `SessionSummary`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSummary {
+    pub id: String,
+    pub project_folder: String,
+    pub project_name: String,
+    pub summary: String,
+    pub modified_at: String,
+    pub size_bytes: u64,
+    pub total_messages: usize,
+    pub total_tool_calls: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SessionListResponse {
+    pub sessions: Vec<SessionSummary>,
+    pub total: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SessionProject {
+    pub folder: String,
+    pub name: String,
+    pub session_count: usize,
+    pub most_recent: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SessionProjectListResponse {
+    pub projects: Vec<SessionProject>,
+    pub total_sessions: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SessionStatsResponse {
+    pub total_sessions: usize,
+    pub sessions_today: usize,
+    pub sessions_this_week: usize,
+    pub most_active_project: Option<String>,
+    pub total_messages: usize,
+}
+
 pub struct SessionService {
     projects_dir: PathBuf,
 }
@@ -438,6 +480,215 @@ impl SessionService {
             project_folder,
             page,
         ))
+    }
+
+    /// Scan `projects_dir` for `.jsonl` session files (optionally one project),
+    /// returning `(folder, session_id, path, modified, size)` from fs metadata
+    /// only — no file contents are read here.
+    async fn scan_session_files(
+        &self,
+        project_filter: Option<&str>,
+    ) -> Result<Vec<(String, String, PathBuf, std::time::SystemTime, u64)>> {
+        let mut out = Vec::new();
+        let mut dir = match fs::read_dir(&self.projects_dir).await {
+            Ok(d) => d,
+            Err(_) => return Ok(out), // projects dir missing → no sessions
+        };
+        while let Some(entry) = dir.next_entry().await? {
+            let folder = entry.file_name().to_string_lossy().to_string();
+            if let Some(filter) = project_filter
+                && folder != filter
+            {
+                continue;
+            }
+            match entry.metadata().await {
+                Ok(m) if m.is_dir() => {}
+                _ => continue,
+            }
+            let mut files = match fs::read_dir(entry.path()).await {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            while let Some(f) = files.next_entry().await? {
+                let fname = f.file_name().to_string_lossy().to_string();
+                if !fname.ends_with(".jsonl") {
+                    continue;
+                }
+                let meta = match f.metadata().await {
+                    Ok(m) => m,
+                    Err(_) => continue,
+                };
+                let modified = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
+                let id = fname.trim_end_matches(".jsonl").to_string();
+                out.push((folder.clone(), id, f.path(), modified, meta.len()));
+            }
+        }
+        Ok(out)
+    }
+
+    /// List sessions (most-recent first), fully parsing at most `limit` files
+    /// for their summaries so a large `projects_dir` stays responsive.
+    pub async fn list_sessions(
+        &self,
+        project_filter: Option<&str>,
+        limit: usize,
+    ) -> Result<SessionListResponse> {
+        let mut files = self.scan_session_files(project_filter).await?;
+        let total = files.len();
+        files.sort_by(|a, b| b.3.cmp(&a.3)); // modified desc
+        files.truncate(limit);
+
+        let mut sessions = Vec::with_capacity(files.len());
+        for (folder, id, path, modified, size) in files {
+            if let Ok(s) = self.summarize_session(&path, &folder, &id, modified, size).await {
+                sessions.push(s);
+            }
+        }
+        Ok(SessionListResponse { sessions, total })
+    }
+
+    /// Parse one session file into a list summary (first user prompt + counts).
+    async fn summarize_session(
+        &self,
+        path: &Path,
+        folder: &str,
+        id: &str,
+        modified: std::time::SystemTime,
+        size: u64,
+    ) -> Result<SessionSummary> {
+        let content = fs::read_to_string(path).await?;
+        let mut total_messages = 0usize;
+        let mut total_tool_calls = 0usize;
+        let mut summary = String::new();
+
+        for line in content.lines() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let v: Value = match serde_json::from_str(line) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            match v.get("type").and_then(Value::as_str) {
+                Some("user") => {
+                    total_messages += 1;
+                    let is_meta = v.get("isMeta").and_then(Value::as_bool).unwrap_or(false);
+                    if summary.is_empty() && !is_meta {
+                        let raw = v
+                            .get("message")
+                            .and_then(|m| m.get("content"))
+                            .map(Self::extract_text_from_content)
+                            .unwrap_or_default();
+                        if !raw.is_empty() {
+                            summary = raw.chars().take(200).collect();
+                        }
+                    }
+                }
+                Some("assistant") => {
+                    total_messages += 1;
+                    if let Some(blocks) = v
+                        .get("message")
+                        .and_then(|m| m.get("content"))
+                        .and_then(Value::as_array)
+                    {
+                        total_tool_calls += blocks
+                            .iter()
+                            .filter(|b| b.get("type").and_then(Value::as_str) == Some("tool_use"))
+                            .count();
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(SessionSummary {
+            id: id.to_string(),
+            project_folder: folder.to_string(),
+            project_name: Self::project_display_name(folder),
+            summary,
+            modified_at: chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339(),
+            size_bytes: size,
+            total_messages,
+            total_tool_calls,
+        })
+    }
+
+    /// List projects with session counts and the most-recent activity, from fs
+    /// metadata only.
+    pub async fn list_projects(&self) -> Result<SessionProjectListResponse> {
+        let files = self.scan_session_files(None).await?;
+        let total_sessions = files.len();
+        let mut by_folder: std::collections::HashMap<String, (usize, std::time::SystemTime)> =
+            std::collections::HashMap::new();
+        for (folder, _id, _path, modified, _size) in &files {
+            let e = by_folder
+                .entry(folder.clone())
+                .or_insert((0, std::time::UNIX_EPOCH));
+            e.0 += 1;
+            if *modified > e.1 {
+                e.1 = *modified;
+            }
+        }
+        let mut projects: Vec<SessionProject> = by_folder
+            .into_iter()
+            .map(|(folder, (count, recent))| SessionProject {
+                name: Self::project_display_name(&folder),
+                folder,
+                session_count: count,
+                most_recent: chrono::DateTime::<chrono::Utc>::from(recent).to_rfc3339(),
+            })
+            .collect();
+        projects.sort_by(|a, b| b.most_recent.cmp(&a.most_recent));
+        Ok(SessionProjectListResponse {
+            projects,
+            total_sessions,
+        })
+    }
+
+    /// Dashboard stats. Session counts come from fs metadata; `total_messages`
+    /// is an entry-count sum across all files (read but not fully parsed).
+    pub async fn dashboard_stats(&self) -> Result<SessionStatsResponse> {
+        let files = self.scan_session_files(None).await?;
+        let total_sessions = files.len();
+        let now = std::time::SystemTime::now();
+        let day = std::time::Duration::from_secs(86_400);
+        let week = std::time::Duration::from_secs(7 * 86_400);
+
+        let mut sessions_today = 0;
+        let mut sessions_this_week = 0;
+        let mut by_folder: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        for (folder, _id, _path, modified, _size) in &files {
+            if let Ok(age) = now.duration_since(*modified) {
+                if age <= day {
+                    sessions_today += 1;
+                }
+                if age <= week {
+                    sessions_this_week += 1;
+                }
+            }
+            *by_folder.entry(folder.clone()).or_insert(0) += 1;
+        }
+        let most_active_project = by_folder
+            .into_iter()
+            .max_by_key(|(_, c)| *c)
+            .map(|(f, _)| Self::project_display_name(&f));
+
+        // total_messages: cheap newline-count sum (≈ entries). TODO: cache.
+        let mut total_messages = 0usize;
+        for (_f, _id, path, _m, _s) in &files {
+            if let Ok(content) = fs::read_to_string(path).await {
+                total_messages += content.lines().filter(|l| !l.trim().is_empty()).count();
+            }
+        }
+
+        Ok(SessionStatsResponse {
+            total_sessions,
+            sessions_today,
+            sessions_this_week,
+            most_active_project,
+            total_messages,
+        })
     }
 }
 
