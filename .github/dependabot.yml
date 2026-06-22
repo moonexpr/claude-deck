@@ -1,13 +1,29 @@
 version: 2
 updates:
+  # Web frontend (Vite/React)
   - package-ecosystem: npm
-    directory: /frontend
+    directory: /app/web
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
 
-  - package-ecosystem: pip
-    directory: /backend
+  # Documentation site (VitePress)
+  - package-ecosystem: npm
+    directory: /docs
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+
+  # Rust server workspace (core + bin)
+  - package-ecosystem: cargo
+    directory: /app/server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+
+  # Tauri desktop crate (self-contained Cargo.lock)
+  - package-ecosystem: cargo
+    directory: /app/desktop/src-tauri
     schedule:
       interval: weekly
     open-pull-requests-limit: 10

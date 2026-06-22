@@ -30,20 +30,20 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: app/web/package-lock.json
 
-      - name: Install frontend dependencies
-        run: cd frontend && npm ci
+      - name: Install web dependencies
+        run: cd app/web && npm ci
 
-      - name: Build frontend
-        run: cd frontend && npm run build
+      - name: Build web frontend
+        run: cd app/web && npm run build
 
       - name: Create release archive
         run: |
-          cd frontend/dist
-          zip -r ../../claude-deck-frontend-v${{ inputs.version }}.zip .
-          cd ../..
-          tar -czvf claude-deck-frontend-v${{ inputs.version }}.tar.gz -C frontend/dist .
+          cd app/web/dist
+          zip -r ../../../claude-deck-web-v${{ inputs.version }}.zip .
+          cd ../../..
+          tar -czvf claude-deck-web-v${{ inputs.version }}.tar.gz -C app/web/dist .
 
       - name: Extract changelog for version
         id: changelog
@@ -68,8 +68,8 @@ jobs:
           draft: false
           prerelease: ${{ contains(inputs.version, '-') }}
           files: |
-            claude-deck-frontend-v${{ inputs.version }}.zip
-            claude-deck-frontend-v${{ inputs.version }}.tar.gz
+            claude-deck-web-v${{ inputs.version }}.zip
+            claude-deck-web-v${{ inputs.version }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -80,5 +80,5 @@ jobs:
           echo "**Version:** v${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Artifacts:**" >> $GITHUB_STEP_SUMMARY
-          echo "- claude-deck-frontend-v${{ inputs.version }}.zip" >> $GITHUB_STEP_SUMMARY
-          echo "- claude-deck-frontend-v${{ inputs.version }}.tar.gz" >> $GITHUB_STEP_SUMMARY
+          echo "- claude-deck-web-v${{ inputs.version }}.zip" >> $GITHUB_STEP_SUMMARY
+          echo "- claude-deck-web-v${{ inputs.version }}.tar.gz" >> $GITHUB_STEP_SUMMARY
