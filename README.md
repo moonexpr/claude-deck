@@ -4,6 +4,11 @@
 
 A self-hosted application for visualizing and managing Claude Code configuration. Provides a unified interface for managing MCP servers, plugins, slash commands, hooks, agents, permissions, usage tracking, session transcripts, CC Bridge, AI chat, and other Claude Code extensions. Ships as a Tauri desktop app **and** a standalone Rust binary for LAN/mobile access.
 
+> [!IMPORTANT]
+> **This is a fork under heavy active development — not yet pinned to a stable release.** Expect breaking changes, in-flux APIs, and rough edges. If you need stability, pin to a specific commit rather than tracking `main`. This fork re-platforms the original onto a Tauri 2 + Rust + React stack.
+>
+> Full credit to the original authors, [Adrian Rubio](https://github.com/adrirubio) and [Juan Rubio](https://github.com/juanrubio), whose upstream project lives at [adrirubio/claude-deck](https://github.com/adrirubio/claude-deck).
+
 ## Why This Exists
 
 Claude Code starts simple, then slowly sprawls across config files and directories: `~/.claude.json`, `~/.claude/settings.json`, `.mcp.json`, slash commands, agents, skills, project settings, transcripts, and usage data. That works fine at small scale, but once your setup gets serious it becomes hard to see the whole picture, change things confidently, or understand what is actually configured.
